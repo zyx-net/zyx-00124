@@ -102,12 +102,41 @@ async function main() {
   const statR = await request('GET', '/api/classroom-stats', undefined, adminToken);
   check(statR.status === 200, '返回 200', `实际 ${statR.status}`);
   check(Array.isArray(statR.data), '返回数组', `实际 ${typeof statR.data}`);
-  if (Array.isArray(statR.data) && statR.data.length > 0) {
-    const first = statR.data[0];
-    for (const key of REQUIRED_CLASSROOM_STAT_KEYS) {
-      check(key in first, `首条数据包含字段 "${key}"`, `实际 keys: ${Object.keys(first).join(',')}`);
+  if (Array.isArray(statR.data)) {
+    check(statR.data.length > 0, '数组非空（至少有默认教室）', `长度 ${statR.data.length}`);
+    let allValid = true;
+    for (let i = 0; i < statR.data.length; i++) {
+      const item = statR.data[i];
+      for (const key of REQUIRED_CLASSROOM_STAT_KEYS) {
+        if (!(key in item)) {
+          check(false, `第 ${i} 条缺少必填字段 "${key}"`);
+          allValid = false;
+        }
+      }
+      if (!noUndefined(item, `第 ${i} 条教室统计`)) allValid = false;
+      // 类型校验
+      if (typeof item.classroomId !== 'string' || item.classroomId.length === 0) {
+        check(false, `第 ${i} 条 classroomId 不是有效字符串`);
+        allValid = false;
+      }
+      if (typeof item.totalSeats !== 'number' || item.totalSeats < 0) {
+        check(false, `第 ${i} 条 totalSeats 不是有效数字`);
+        allValid = false;
+      }
+      if (typeof item.totalReservations !== 'number' || item.totalReservations < 0) {
+        check(false, `第 ${i} 条 totalReservations 不是有效数字`);
+        allValid = false;
+      }
+      if (typeof item.completedCount !== 'number' || item.completedCount < 0) {
+        check(false, `第 ${i} 条 completedCount 不是有效数字`);
+        allValid = false;
+      }
+      if (typeof item.utilizationRate !== 'number') {
+        check(false, `第 ${i} 条 utilizationRate 不是数字`);
+        allValid = false;
+      }
     }
-    check(noUndefined(first, '首条教室统计'), '首条数据无 undefined 字段');
+    if (allValid) check(true, '全部教室统计数据字段完整且类型正确');
   }
 
   // ----------------------------------------------------------------
@@ -203,15 +232,43 @@ async function main() {
     check(header.includes('教室名称'), 'CSV 表头含"教室名称"');
     check(header.includes('完成次数'), 'CSV 表头含"完成次数"');
     check(header.includes('使用率'), 'CSV 表头含"使用率"');
+    const headerCols = header.split(',').length;
+    // 逐行检查：所有数据行列数与表头一致，且无 undefined
+    let allRowsValid = true;
+    for (let i = 1; i < csvLines.length; i++) {
+      const cols = csvLines[i].split(',');
+      if (cols.length !== headerCols) {
+        check(false, `CSV 第 ${i} 行列数 ${cols.length} 与表头 ${headerCols} 不一致`);
+        allRowsValid = false;
+      }
+      if (cols.some((c: string) => c === 'undefined' || c === 'null' || c === '')) {
+        check(false, `CSV 第 ${i} 行含空/undefined/null 值`);
+        allRowsValid = false;
+      }
+    }
+    if (allRowsValid) check(true, '所有 CSV 数据行列数一致且无空值');
   }
-  // 找 A101 行
+  // 找 A101 行，与 API 数值对齐
   const a101Line = csvLines.find((l: string) => l.includes('A101'));
   if (a101Line && clsA101) {
     const cols = a101Line.split(',');
     // CSV 列：教室名称,教学楼,可用座位数,预约总数,完成次数,使用率
     check(cols[3] === String(clsA101.totalReservations), `CSV totalReservations=${cols[3]} 与 API=${clsA101.totalReservations} 一致`);
     check(cols[4] === String(clsA101.completedCount), `CSV completedCount=${cols[4]} 与 API=${clsA101.completedCount} 一致`);
-    check(!cols.some((c: string) => c === 'undefined'), 'CSV 无 "undefined" 值');
+  }
+
+  // ----------------------------------------------------------------
+  // 4b. 走错接口检测：如果误用 /api/classrooms 当统计用，能检测到字段缺失
+  // ----------------------------------------------------------------
+  console.log('\n4b. 走错接口检测：误用 /api/classrooms 当统计用会被检测到');
+  const wrongR = await request('GET', '/api/classrooms', undefined, adminToken);
+  if (Array.isArray(wrongR.data) && wrongR.data.length > 0) {
+    const firstWrong = wrongR.data[0];
+    const missingStatsFields = REQUIRED_CLASSROOM_STAT_KEYS.filter((k) => !(k in firstWrong));
+    check(missingStatsFields.length > 0, `能检测到走错接口缺失的统计字段`, `缺失: ${missingStatsFields.join(',')}`);
+    // 走错接口拿到的是 Classroom 基础对象，不应该有 completedCount 等统计字段
+    check(!('completedCount' in firstWrong), '旧入口 /api/classrooms 不含 completedCount（不会混淆）');
+    check(!('utilizationRate' in firstWrong), '旧入口 /api/classrooms 不含 utilizationRate（不会混淆）');
   }
 
   // ----------------------------------------------------------------

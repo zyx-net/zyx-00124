@@ -192,6 +192,6 @@ npm run check
 | GET | `/api/violations` | 违约记录 | 登录 |
 | GET | `/api/history` | 历史记录 | 登录 |
 | GET | `/api/students` | 学生统计 | 登录 |
-| GET | `/api/classrooms` | 教室统计 | 登录 |
+| GET | `/api/classroom-stats` | 教室统计 | 登录 |
 | GET | `/api/export/:type` | 导出 CSV | 登录 |
 | GET | `/api/audit-logs` | 操作日志 | 登录 |

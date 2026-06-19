@@ -603,7 +603,7 @@
       "approvedAt": "2026-06-19T17:51:55.406Z"
     },
     {
-      "id": "res-e2e-1781894640613",
+      "id": "res-e2e-1781896939609",
       "studentId": "stu-001",
       "classroomId": "cls-a101",
       "seatId": "cls-a101-seat-A-1",
@@ -615,7 +615,7 @@
       "startTime": "08:00",
       "endTime": "10:00",
       "status": "completed",
-      "createdAt": "2026-06-19T18:44:00.613Z",
+      "createdAt": "2026-06-19T19:22:19.609Z",
       "isLate": true,
       "notCheckedOut": true
     }
@@ -630,15 +630,59 @@
       "createdAt": "2026-06-19T18:18:55.888Z"
     },
     {
-      "id": "v-e2e-1781894640637",
+      "id": "v-e2e-1781896939634",
       "studentId": "stu-001",
-      "reservationId": "res-e2e-1781894640613",
+      "reservationId": "res-e2e-1781896939609",
       "type": "no_show",
       "date": "2026-06-20",
-      "createdAt": "2026-06-19T18:44:00.637Z"
+      "createdAt": "2026-06-19T19:22:19.634Z"
     }
   ],
   "auditLogs": [
+    {
+      "id": "mqlbfi3xdxtnzr",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "签到失败",
+      "targetId": "res-e2e-1781896939609",
+      "success": false,
+      "reason": "尚未到签到时间",
+      "createdAt": "2026-06-19T19:22:19.629Z"
+    },
+    {
+      "id": "mqlbfi3mlrnv5x",
+      "userId": "stu-002",
+      "userName": "李四",
+      "action": "签到失败",
+      "targetId": "res-e2e-1781896939609",
+      "success": false,
+      "reason": "不能替他人签到",
+      "createdAt": "2026-06-19T19:22:19.618Z"
+    },
+    {
+      "id": "mqlbfi0inwi0cq",
+      "userId": "stu-002",
+      "userName": "李四",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T19:22:19.506Z"
+    },
+    {
+      "id": "mqlbfi0fheboek",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T19:22:19.503Z"
+    },
+    {
+      "id": "mqlbfi095ty05r",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T19:22:19.497Z"
+    },
     {
       "id": "mqlaq0ge6vccwb",
       "userId": "admin-001",
