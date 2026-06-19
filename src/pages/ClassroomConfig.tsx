@@ -13,12 +13,19 @@ import {
   Loader2,
   MapPin,
   AlertTriangle,
+  Upload,
+  Download,
+  Undo2,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  Info,
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
-import { formatDate, todayStr, weekdayName } from '@/lib/format';
+import { todayStr, weekdayName } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { Classroom, Seat, TimeSlot, ClosedDate } from '../../shared/types';
+import type { Classroom, Seat, TimeSlot, ClosedDate, ImportPreviewResult, ImportExecuteResult, ClosedDateImportSnapshot } from '../../shared/types';
 
 type ViewMode = 'list' | 'detail';
 type DetailTab = 'seats' | 'slots' | 'closed';
@@ -59,7 +66,7 @@ export default function ClassroomConfig() {
   const [seats, setSeats] = useState<Seat[]>([]);
   const [seatsSaving, setSeatsSaving] = useState(false);
 
-  const [slots, setSlots] = useState<TimeSlot[]>([]);
+  const [_slots, setSlots] = useState<TimeSlot[]>([]);
   const [slotForms, setSlotForms] = useState<SlotForm[]>([]);
   const [slotsSaving, setSlotsSaving] = useState(false);
 
@@ -67,6 +74,15 @@ export default function ClassroomConfig() {
   const [closedDateInput, setClosedDateInput] = useState(todayStr());
   const [closedReasonInput, setClosedReasonInput] = useState('');
   const [closedSaving, setClosedSaving] = useState(false);
+
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importCsvText, setImportCsvText] = useState('');
+  const [importPreview, setImportPreview] = useState<ImportPreviewResult | null>(null);
+  const [importPreviewLoading, setImportPreviewLoading] = useState(false);
+  const [importExecuting, setImportExecuting] = useState(false);
+  const [importSkipDuplicates, setImportSkipDuplicates] = useState(true);
+  const [lastImportSnapshot, setLastImportSnapshot] = useState<ClosedDateImportSnapshot | null>(null);
+  const [lastImportResult, setLastImportResult] = useState<ImportExecuteResult | null>(null);
 
   useEffect(() => {
     fetchClassrooms();
@@ -171,9 +187,10 @@ export default function ClassroomConfig() {
     setViewMode('detail');
     setDetailTab('seats');
     try {
-      const [slotData, closedData] = await Promise.all([
+      const [slotData, closedData, lastSnap] = await Promise.all([
         api.listSlots(c.id),
         api.listClosedDates(),
+        api.getLastClosedDatesImport(),
       ]);
       setSlots(slotData || []);
       setSlotForms(
@@ -184,6 +201,8 @@ export default function ClassroomConfig() {
         }))
       );
       setClosedDates(closedData || []);
+      setLastImportSnapshot(lastSnap || null);
+      setLastImportResult(null);
     } catch (err: any) {
       show('error', err?.error || '加载配置失败');
     }
@@ -310,6 +329,83 @@ export default function ClassroomConfig() {
       show('error', err?.error || '删除关闭日期失败');
     } finally {
       setClosedSaving(false);
+    }
+  };
+
+  const handleExportClosedDates = async () => {
+    try {
+      await api.exportClosedDates();
+      show('success', '已导出关闭日期 CSV');
+    } catch (err: any) {
+      show('error', err?.error || '导出失败');
+    }
+  };
+
+  const openImportModal = () => {
+    setImportCsvText('');
+    setImportPreview(null);
+    setImportModalOpen(true);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImportCsvText(String(reader.result || ''));
+      setImportPreview(null);
+    };
+    reader.readAsText(file, 'utf-8');
+    e.target.value = '';
+  };
+
+  const handlePreviewImport = async () => {
+    if (!importCsvText.trim()) {
+      show('error', '请先上传 CSV 文件或粘贴内容');
+      return;
+    }
+    setImportPreviewLoading(true);
+    try {
+      const preview = await api.previewClosedDatesImport(importCsvText);
+      setImportPreview(preview);
+    } catch (err: any) {
+      show('error', err?.error || '预览失败');
+    } finally {
+      setImportPreviewLoading(false);
+    }
+  };
+
+  const handleExecuteImport = async () => {
+    if (!importCsvText.trim()) return;
+    setImportExecuting(true);
+    try {
+      const result = await api.executeClosedDatesImport(importCsvText, importSkipDuplicates);
+      const latest = await api.listClosedDates();
+      const snap = await api.getLastClosedDatesImport();
+      setClosedDates(latest || []);
+      setLastImportSnapshot(snap || null);
+      setLastImportResult(result);
+      setImportModalOpen(false);
+      show('success', result.summary);
+    } catch (err: any) {
+      show('error', err?.error || '导入失败');
+    } finally {
+      setImportExecuting(false);
+    }
+  };
+
+  const handleUndoLastImport = async () => {
+    if (!lastImportSnapshot) return;
+    if (!window.confirm(`确认撤销最近一次批量导入？将移除本次导入的 ${lastImportSnapshot.importedCount} 条记录。`)) return;
+    try {
+      const r = await api.undoLastClosedDatesImport();
+      const latest = await api.listClosedDates();
+      setClosedDates(latest || []);
+      setLastImportSnapshot(null);
+      setLastImportResult(null);
+      show('success', r.summary);
+    } catch (err: any) {
+      show('error', err?.error || '撤销失败');
     }
   };
 
@@ -574,6 +670,45 @@ export default function ClassroomConfig() {
 
             {detailTab === 'closed' && (
               <div className="space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs text-zinc-500">
+                    <Info className="w-4 h-4" />
+                    <span>CSV 格式：日期,关闭原因（如 2026-01-01,元旦），支持中英文表头</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={handleExportClosedDates} className="btn-secondary">
+                      <Download className="w-4 h-4" />
+                      导出 CSV
+                    </button>
+                    {lastImportSnapshot && (
+                      <button onClick={handleUndoLastImport} className="btn-secondary text-amber-700 border-amber-300 hover:bg-amber-50">
+                        <Undo2 className="w-4 h-4" />
+                        撤销上次导入 ({lastImportSnapshot.importedCount} 条)
+                      </button>
+                    )}
+                    <button onClick={openImportModal} className="btn-primary">
+                      <Upload className="w-4 h-4" />
+                      批量导入
+                    </button>
+                  </div>
+                </div>
+
+                {lastImportResult && (
+                  <div className="card p-4 bg-emerald-50 border border-emerald-200">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5" />
+                      <div className="flex-1 text-sm text-emerald-800">
+                        <div className="font-medium">本次导入结果</div>
+                        <div className="mt-1">
+                          新增 {lastImportResult.added} 条
+                          {lastImportResult.skipped > 0 && `，跳过重复 ${lastImportResult.skipped} 条`}
+                          {lastImportResult.failed > 0 && `，无效 ${lastImportResult.failed} 条`}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="card p-4 border border-zinc-200">
                   <h4 className="text-sm font-semibold text-zinc-800 mb-3">
                     添加关闭日期
@@ -984,6 +1119,173 @@ export default function ClassroomConfig() {
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : null}
                 确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {importModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => !importExecuting && !importPreviewLoading && setImportModalOpen(false)}
+          />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-3xl mx-4 overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100">
+              <h3 className="text-base font-semibold text-zinc-800 flex items-center gap-2">
+                <Upload className="w-5 h-5 text-brand-500" />
+                批量导入关闭日期
+              </h3>
+              <button
+                onClick={() => !importExecuting && !importPreviewLoading && setImportModalOpen(false)}
+                disabled={importExecuting || importPreviewLoading}
+                className="p-1 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
+              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 flex items-start gap-2">
+                <FileText className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-blue-800 space-y-1">
+                  <div className="font-medium">CSV 格式要求</div>
+                  <div>表头：<code className="px-1 rounded bg-blue-100">日期,关闭原因</code> 或 <code className="px-1 rounded bg-blue-100">date,reason</code></div>
+                  <div>示例：<code className="px-1 rounded bg-blue-100">2026-01-01,元旦</code>、<code className="px-1 rounded bg-blue-100">2026-02-17,教室设备检修</code></div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="label">选择 CSV 文件</label>
+                <div className="flex gap-2">
+                  <label className="btn-secondary cursor-pointer flex-1 flex items-center justify-center gap-2">
+                    <Upload className="w-4 h-4" />
+                    选择文件
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      disabled={importExecuting || importPreviewLoading}
+                    />
+                  </label>
+                </div>
+                <div className="text-xs text-zinc-500">或直接在下方粘贴 CSV 内容</div>
+              </div>
+
+              <div>
+                <label className="label">CSV 内容</label>
+                <textarea
+                  value={importCsvText}
+                  onChange={(e) => { setImportCsvText(e.target.value); setImportPreview(null); }}
+                  placeholder="日期,关闭原因&#10;2026-01-01,元旦&#10;2026-02-17,教室设备检修"
+                  rows={6}
+                  className="input font-mono text-xs"
+                  disabled={importExecuting || importPreviewLoading}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm text-zinc-700">
+                  <input
+                    type="checkbox"
+                    checked={importSkipDuplicates}
+                    onChange={(e) => setImportSkipDuplicates(e.target.checked)}
+                    className="w-4 h-4 rounded border-zinc-300 text-brand-600 focus:ring-brand-500"
+                    disabled={importExecuting || importPreviewLoading}
+                  />
+                  遇到重复日期自动跳过
+                </label>
+                <button
+                  onClick={handlePreviewImport}
+                  disabled={!importCsvText.trim() || importPreviewLoading || importExecuting}
+                  className="btn-secondary"
+                >
+                  {importPreviewLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  预览导入结果
+                </button>
+              </div>
+
+              {importPreview && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-4 gap-3">
+                    <div className="p-3 rounded-lg bg-zinc-50 border border-zinc-200 text-center">
+                      <div className="text-lg font-semibold text-zinc-800">{importPreview.total}</div>
+                      <div className="text-xs text-zinc-500">总行数</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-center">
+                      <div className="text-lg font-semibold text-emerald-700">{importPreview.newCount}</div>
+                      <div className="text-xs text-emerald-600">可新增</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-center">
+                      <div className="text-lg font-semibold text-amber-700">{importPreview.duplicateCount}</div>
+                      <div className="text-xs text-amber-600">重复</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-center">
+                      <div className="text-lg font-semibold text-red-700">{importPreview.invalidCount}</div>
+                      <div className="text-xs text-red-600">无效</div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-hidden rounded-xl border border-zinc-200 max-h-64 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-zinc-50 sticky top-0">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium text-zinc-500">行号</th>
+                          <th className="text-left px-3 py-2 font-medium text-zinc-500">日期</th>
+                          <th className="text-left px-3 py-2 font-medium text-zinc-500">原因</th>
+                          <th className="text-left px-3 py-2 font-medium text-zinc-500">状态</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100">
+                        {importPreview.rows.map((r) => (
+                          <tr key={r.line} className="hover:bg-zinc-50">
+                            <td className="px-3 py-2 text-zinc-500">{r.line}</td>
+                            <td className="px-3 py-2 font-mono text-zinc-800">{r.date || '-'}</td>
+                            <td className="px-3 py-2 text-zinc-700 truncate max-w-[200px]" title={r.reason}>{r.reason || '-'}</td>
+                            <td className="px-3 py-2">
+                              {r.status === 'new' && (
+                                <span className="inline-flex items-center gap-1 text-emerald-700">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  新增
+                                </span>
+                              )}
+                              {r.status === 'duplicate' && (
+                                <span className="inline-flex items-center gap-1 text-amber-700">
+                                  <AlertTriangle className="w-3.5 h-3.5" />
+                                  {r.message}
+                                </span>
+                              )}
+                              {r.status === 'invalid' && (
+                                <span className="inline-flex items-center gap-1 text-red-700">
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  {r.message}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 bg-zinc-50 border-t border-zinc-100">
+              <button
+                onClick={() => !importExecuting && !importPreviewLoading && setImportModalOpen(false)}
+                disabled={importExecuting || importPreviewLoading}
+                className="btn-secondary"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleExecuteImport}
+                disabled={!importCsvText.trim() || importExecuting || importPreviewLoading || importPreview?.newCount === 0}
+                className="btn-primary"
+              >
+                {importExecuting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                确认导入 {importPreview && importPreview.newCount > 0 ? `(${importPreview.newCount} 条)` : ''}
               </button>
             </div>
           </div>

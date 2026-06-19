@@ -87,6 +87,40 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ dates }),
     }),
+  exportClosedDates: async () => {
+    const token = getToken();
+    const res = await fetch('/api/classrooms/closed-dates/export', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      let data: any;
+      try { data = await res.json(); } catch { data = { error: `HTTP ${res.status}` }; }
+      throw data;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `closed-dates-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+  previewClosedDatesImport: (csv: string) =>
+    request<import('../../shared/types').ImportPreviewResult>('/api/classrooms/closed-dates/import/preview', {
+      method: 'POST',
+      body: JSON.stringify({ csv }),
+    }),
+  executeClosedDatesImport: (csv: string, skipDuplicates = true) =>
+    request<import('../../shared/types').ImportExecuteResult>('/api/classrooms/closed-dates/import/execute', {
+      method: 'POST',
+      body: JSON.stringify({ csv, skipDuplicates }),
+    }),
+  undoLastClosedDatesImport: () =>
+    request<{ success: boolean; batchId: string; restoredCount: number; summary: string }>('/api/classrooms/closed-dates/import/undo', {
+      method: 'POST',
+    }),
+  getLastClosedDatesImport: () =>
+    request<import('../../shared/types').ClosedDateImportSnapshot | null>('/api/classrooms/closed-dates/import/last'),
   getSeatStatus: (classroomId: string, date: string, slotId: string) =>
     request<{ closed: boolean; closedReason?: string; seats: Record<string, { available: boolean; reservationId?: string }> }>(
       `/api/reservations/seat-status?classroomId=${classroomId}&date=${date}&slotId=${slotId}`,

@@ -1,7 +1,16 @@
 import { Router, type Request, type Response } from 'express';
 import { getDB, saveDB, generateId } from '../data/store.js';
 import { authMiddleware, roleMiddleware, logAudit } from '../middleware/auth.js';
-import type { Classroom, Seat, TimeSlot, ClosedDate } from '../../shared/types.js';
+import type {
+  Classroom,
+  Seat,
+  TimeSlot,
+  ClosedDate,
+  ImportPreviewRow,
+  ImportPreviewResult,
+  ImportExecuteResult,
+  ClosedDateImportSnapshot,
+} from '../../shared/types.js';
 
 const router = Router();
 
@@ -147,6 +156,188 @@ router.put('/closed-dates/batch', authMiddleware, roleMiddleware('admin'), (req:
   saveDB(db);
   logAudit(req.currentUser!.id, req.currentUser!.name, '更新关闭日期', undefined, true);
   res.json(db.closedDates);
+});
+
+function isValidDateStr(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return false;
+  const [y, m, day] = s.split('-').map(Number);
+  return d.getFullYear() === y && d.getMonth() + 1 === m && d.getDate() === day;
+}
+
+function parseCSV(text: string): string[][] {
+  const lines: string[][] = [];
+  let cur: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += ch;
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === ',') { cur.push(field); field = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        cur.push(field); field = '';
+        if (cur.some((c) => c.length > 0)) lines.push(cur);
+        cur = [];
+      } else field += ch;
+    }
+  }
+  if (field.length > 0 || cur.length > 0) { cur.push(field); lines.push(cur); }
+  return lines;
+}
+
+function buildPreview(csvText: string, existingDates: Set<string>): ImportPreviewResult {
+  const rows = parseCSV(csvText.replace(/^\uFEFF/, ''));
+  if (rows.length === 0) {
+    return { total: 0, newCount: 0, duplicateCount: 0, invalidCount: 0, rows: [] };
+  }
+  const header = rows[0].map((h) => h.trim().toLowerCase());
+  const dateIdx = header.findIndex((h) => h === 'date' || h === '日期');
+  const reasonIdx = header.findIndex((h) => h === 'reason' || h === '关闭原因' || h === '原因');
+  const previewRows: ImportPreviewRow[] = [];
+  const seenInBatch = new Set<string>();
+  for (let i = 1; i < rows.length; i++) {
+    const raw = rows[i];
+    const lineNum = i + 1;
+    const rawDate = (dateIdx >= 0 ? raw[dateIdx] : raw[0] || '').trim();
+    const rawReason = (reasonIdx >= 0 ? raw[reasonIdx] : raw[1] || '').trim();
+    const errors: string[] = [];
+    let status: ImportPreviewRow['status'] = 'new';
+    if (!isValidDateStr(rawDate)) errors.push('日期格式错误（应为 YYYY-MM-DD）');
+    if (!rawReason) errors.push('关闭原因不能为空');
+    if (errors.length > 0) {
+      status = 'invalid';
+    } else if (existingDates.has(rawDate) || seenInBatch.has(rawDate)) {
+      status = 'duplicate';
+      errors.push('日期已存在');
+    } else {
+      seenInBatch.add(rawDate);
+    }
+    previewRows.push({
+      line: lineNum,
+      date: rawDate,
+      reason: rawReason,
+      status,
+      message: errors.join('；') || undefined,
+    });
+  }
+  return {
+    total: previewRows.length,
+    newCount: previewRows.filter((r) => r.status === 'new').length,
+    duplicateCount: previewRows.filter((r) => r.status === 'duplicate').length,
+    invalidCount: previewRows.filter((r) => r.status === 'invalid').length,
+    rows: previewRows,
+  };
+}
+
+function closedDatesToCSV(list: ClosedDate[]): string {
+  const escape = (s: string) => {
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  };
+  const lines = ['日期,关闭原因'];
+  for (const cd of list) lines.push(`${escape(cd.date)},${escape(cd.reason)}`);
+  return lines.join('\n');
+}
+
+router.get('/closed-dates/export', authMiddleware, roleMiddleware('admin'), (_req: Request, res: Response): void => {
+  const db = getDB();
+  const csv = closedDatesToCSV(db.closedDates);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename=closed-dates-${Date.now()}.csv`);
+  res.send('\uFEFF' + csv);
+  logAudit(_req.currentUser!.id, _req.currentUser!.name, '导出关闭日期CSV', undefined, true);
+});
+
+router.post('/closed-dates/import/preview', authMiddleware, roleMiddleware('admin'), (req: Request, res: Response): void => {
+  const { csv } = req.body as { csv?: string };
+  if (!csv) {
+    res.status(400).json({ error: '缺少 CSV 内容' });
+    return;
+  }
+  const db = getDB();
+  const existing = new Set(db.closedDates.map((d) => d.date));
+  const preview = buildPreview(csv, existing);
+  logAudit(req.currentUser!.id, req.currentUser!.name, '预览关闭日期导入', undefined, true);
+  res.json(preview);
+});
+
+router.post('/closed-dates/import/execute', authMiddleware, roleMiddleware('admin'), (req: Request, res: Response): void => {
+  const { csv, skipDuplicates } = req.body as { csv?: string; skipDuplicates?: boolean };
+  if (!csv) {
+    res.status(400).json({ error: '缺少 CSV 内容' });
+    return;
+  }
+  const db = getDB();
+  const existing = new Set(db.closedDates.map((d) => d.date));
+  const preview = buildPreview(csv, existing);
+  const previousClosedDates = JSON.parse(JSON.stringify(db.closedDates)) as ClosedDate[];
+  const newItems: ClosedDate[] = [];
+  const finalRows: ImportPreviewRow[] = preview.rows.map((r) => {
+    if (r.status === 'new') {
+      newItems.push({ date: r.date, reason: r.reason });
+      existing.add(r.date);
+      return { ...r };
+    }
+    if (r.status === 'duplicate' && skipDuplicates) {
+      return { ...r };
+    }
+    return { ...r };
+  });
+  const merged = [...previousClosedDates, ...newItems].sort((a, b) => a.date.localeCompare(b.date));
+  db.closedDates = merged;
+  const batchId = 'batch-' + generateId();
+  const summary = `成功导入 ${newItems.length} 条${preview.duplicateCount > 0 ? `（跳过重复 ${preview.duplicateCount} 条）` : ''}${preview.invalidCount > 0 ? `，无效 ${preview.invalidCount} 条` : ''}`;
+  const snapshot: ClosedDateImportSnapshot = {
+    batchId,
+    previousClosedDates,
+    importedCount: newItems.length,
+    importedBy: req.currentUser!.id,
+    importedByName: req.currentUser!.name,
+    importedAt: new Date().toISOString(),
+    summary,
+  };
+  db.lastClosedDateImport = snapshot;
+  saveDB(db);
+  logAudit(req.currentUser!.id, req.currentUser!.name, `批量导入关闭日期: ${summary}`, batchId, true);
+  const result: ImportExecuteResult = {
+    success: true,
+    added: newItems.length,
+    skipped: skipDuplicates ? preview.duplicateCount : 0,
+    failed: preview.invalidCount,
+    rows: finalRows,
+    batchId,
+    summary,
+  };
+  res.json(result);
+});
+
+router.post('/closed-dates/import/undo', authMiddleware, roleMiddleware('admin'), (req: Request, res: Response): void => {
+  const db = getDB();
+  const snap = db.lastClosedDateImport;
+  if (!snap) {
+    res.status(400).json({ error: '没有可撤销的批量导入' });
+    return;
+  }
+  db.closedDates = snap.previousClosedDates;
+  const batchId = snap.batchId;
+  const restoredCount = snap.importedCount;
+  db.lastClosedDateImport = null;
+  saveDB(db);
+  logAudit(req.currentUser!.id, req.currentUser!.name, `撤销关闭日期批量导入，恢复 ${restoredCount} 条前的状态`, batchId, true);
+  res.json({ success: true, batchId, restoredCount, summary: `已撤销最近一次导入（${restoredCount} 条）` });
+});
+
+router.get('/closed-dates/import/last', authMiddleware, roleMiddleware('admin'), (_req: Request, res: Response): void => {
+  const db = getDB();
+  res.json(db.lastClosedDateImport || null);
 });
 
 export default router;

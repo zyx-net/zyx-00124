@@ -10,6 +10,7 @@ import type {
   Violation,
   AuditLog,
   SystemConfig,
+  ClosedDateImportSnapshot,
 } from '../../shared/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -55,6 +56,7 @@ export interface DB {
   violations: Violation[];
   auditLogs: AuditLog[];
   config: SystemConfig;
+  lastClosedDateImport?: ClosedDateImportSnapshot | null;
 }
 
 function getDefaultData(): DB {
@@ -150,6 +152,7 @@ function getDefaultData(): DB {
     violations: [],
     auditLogs: [],
     config,
+    lastClosedDateImport: null,
   };
 }
 

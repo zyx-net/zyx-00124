@@ -41,6 +41,44 @@ export interface ClosedDate {
   reason: string;
 }
 
+export type ImportRowStatus = 'new' | 'duplicate' | 'invalid';
+
+export interface ImportPreviewRow {
+  line: number;
+  date: string;
+  reason: string;
+  status: ImportRowStatus;
+  message?: string;
+}
+
+export interface ImportPreviewResult {
+  total: number;
+  newCount: number;
+  duplicateCount: number;
+  invalidCount: number;
+  rows: ImportPreviewRow[];
+}
+
+export interface ImportExecuteResult {
+  success: boolean;
+  added: number;
+  skipped: number;
+  failed: number;
+  rows: ImportPreviewRow[];
+  batchId: string;
+  summary: string;
+}
+
+export interface ClosedDateImportSnapshot {
+  batchId: string;
+  previousClosedDates: ClosedDate[];
+  importedCount: number;
+  importedBy: string;
+  importedByName?: string;
+  importedAt: string;
+  summary: string;
+}
+
 export type ReservationStatus =
   | 'pending'
   | 'approved'
