@@ -1,0 +1,876 @@
+{
+  "users": [
+    {
+      "id": "admin-001",
+      "username": "admin",
+      "password": "admin123",
+      "name": "系统管理员",
+      "role": "admin",
+      "createdAt": "2026-06-19T17:17:39.973Z"
+    },
+    {
+      "id": "stu-001",
+      "username": "student01",
+      "password": "123456",
+      "name": "张三",
+      "role": "student",
+      "studentId": "2024001",
+      "createdAt": "2026-06-19T17:17:39.973Z"
+    },
+    {
+      "id": "stu-002",
+      "username": "student02",
+      "password": "123456",
+      "name": "李四",
+      "role": "student",
+      "studentId": "2024002",
+      "createdAt": "2026-06-19T17:17:39.973Z"
+    }
+  ],
+  "classrooms": [
+    {
+      "id": "cls-a101",
+      "name": "A101",
+      "building": "A栋教学楼",
+      "rows": 5,
+      "cols": 6,
+      "seats": [
+        {
+          "id": "cls-a101-seat-1-1",
+          "row": 1,
+          "col": 1,
+          "label": "A1",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-1-2",
+          "row": 1,
+          "col": 2,
+          "label": "A2",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-1-3",
+          "row": 1,
+          "col": 3,
+          "label": "A3",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-1-4",
+          "row": 1,
+          "col": 4,
+          "label": "A4",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-1-5",
+          "row": 1,
+          "col": 5,
+          "label": "A5",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-1-6",
+          "row": 1,
+          "col": 6,
+          "label": "A6",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-2-1",
+          "row": 2,
+          "col": 1,
+          "label": "B1",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-2-2",
+          "row": 2,
+          "col": 2,
+          "label": "B2",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-2-3",
+          "row": 2,
+          "col": 3,
+          "label": "B3",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-2-4",
+          "row": 2,
+          "col": 4,
+          "label": "B4",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-2-5",
+          "row": 2,
+          "col": 5,
+          "label": "B5",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-2-6",
+          "row": 2,
+          "col": 6,
+          "label": "B6",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-3-1",
+          "row": 3,
+          "col": 1,
+          "label": "C1",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-3-2",
+          "row": 3,
+          "col": 2,
+          "label": "C2",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-3-3",
+          "row": 3,
+          "col": 3,
+          "label": "C3",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-3-4",
+          "row": 3,
+          "col": 4,
+          "label": "C4",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-3-5",
+          "row": 3,
+          "col": 5,
+          "label": "C5",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-3-6",
+          "row": 3,
+          "col": 6,
+          "label": "C6",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-4-1",
+          "row": 4,
+          "col": 1,
+          "label": "D1",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-4-2",
+          "row": 4,
+          "col": 2,
+          "label": "D2",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-4-3",
+          "row": 4,
+          "col": 3,
+          "label": "D3",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-4-4",
+          "row": 4,
+          "col": 4,
+          "label": "D4",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-4-5",
+          "row": 4,
+          "col": 5,
+          "label": "D5",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-4-6",
+          "row": 4,
+          "col": 6,
+          "label": "D6",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-5-1",
+          "row": 5,
+          "col": 1,
+          "label": "E1",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-5-2",
+          "row": 5,
+          "col": 2,
+          "label": "E2",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-5-3",
+          "row": 5,
+          "col": 3,
+          "label": "E3",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-5-4",
+          "row": 5,
+          "col": 4,
+          "label": "E4",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-5-5",
+          "row": 5,
+          "col": 5,
+          "label": "E5",
+          "enabled": true
+        },
+        {
+          "id": "cls-a101-seat-5-6",
+          "row": 5,
+          "col": 6,
+          "label": "E6",
+          "enabled": true
+        }
+      ],
+      "createdAt": "2026-06-19T17:17:39.973Z"
+    },
+    {
+      "id": "cls-b202",
+      "name": "B202",
+      "building": "B栋教学楼",
+      "rows": 4,
+      "cols": 5,
+      "seats": [
+        {
+          "id": "cls-b202-seat-1-1",
+          "row": 1,
+          "col": 1,
+          "label": "A1",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-1-2",
+          "row": 1,
+          "col": 2,
+          "label": "A2",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-1-3",
+          "row": 1,
+          "col": 3,
+          "label": "A3",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-1-4",
+          "row": 1,
+          "col": 4,
+          "label": "A4",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-1-5",
+          "row": 1,
+          "col": 5,
+          "label": "A5",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-2-1",
+          "row": 2,
+          "col": 1,
+          "label": "B1",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-2-2",
+          "row": 2,
+          "col": 2,
+          "label": "B2",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-2-3",
+          "row": 2,
+          "col": 3,
+          "label": "B3",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-2-4",
+          "row": 2,
+          "col": 4,
+          "label": "B4",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-2-5",
+          "row": 2,
+          "col": 5,
+          "label": "B5",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-3-1",
+          "row": 3,
+          "col": 1,
+          "label": "C1",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-3-2",
+          "row": 3,
+          "col": 2,
+          "label": "C2",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-3-3",
+          "row": 3,
+          "col": 3,
+          "label": "C3",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-3-4",
+          "row": 3,
+          "col": 4,
+          "label": "C4",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-3-5",
+          "row": 3,
+          "col": 5,
+          "label": "C5",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-4-1",
+          "row": 4,
+          "col": 1,
+          "label": "D1",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-4-2",
+          "row": 4,
+          "col": 2,
+          "label": "D2",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-4-3",
+          "row": 4,
+          "col": 3,
+          "label": "D3",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-4-4",
+          "row": 4,
+          "col": 4,
+          "label": "D4",
+          "enabled": true
+        },
+        {
+          "id": "cls-b202-seat-4-5",
+          "row": 4,
+          "col": 5,
+          "label": "D5",
+          "enabled": true
+        }
+      ],
+      "createdAt": "2026-06-19T17:17:39.973Z"
+    },
+    {
+      "id": "cls-mql95z3b61341u",
+      "name": "ReviewRoom",
+      "building": "ReviewBuilding",
+      "rows": 2,
+      "cols": 2,
+      "seats": [
+        {
+          "id": "cls-mql95z3b61341u-seat-1-1",
+          "row": 1,
+          "col": 1,
+          "label": "A1",
+          "enabled": true
+        },
+        {
+          "id": "cls-mql95z3b61341u-seat-1-2",
+          "row": 1,
+          "col": 2,
+          "label": "A2",
+          "enabled": true
+        },
+        {
+          "id": "cls-mql95z3b61341u-seat-2-1",
+          "row": 2,
+          "col": 1,
+          "label": "B1",
+          "enabled": true
+        },
+        {
+          "id": "cls-mql95z3b61341u-seat-2-2",
+          "row": 2,
+          "col": 2,
+          "label": "B2",
+          "enabled": true
+        }
+      ],
+      "createdAt": "2026-06-19T18:18:55.847Z"
+    }
+  ],
+  "timeSlots": [
+    {
+      "id": "slot-1",
+      "classroomId": "cls-a101",
+      "startTime": "08:00",
+      "endTime": "10:00",
+      "weekday": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "id": "slot-2",
+      "classroomId": "cls-a101",
+      "startTime": "10:00",
+      "endTime": "12:00",
+      "weekday": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "id": "slot-3",
+      "classroomId": "cls-a101",
+      "startTime": "14:00",
+      "endTime": "16:00",
+      "weekday": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "id": "slot-4",
+      "classroomId": "cls-a101",
+      "startTime": "16:00",
+      "endTime": "18:00",
+      "weekday": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "id": "slot-5",
+      "classroomId": "cls-b202",
+      "startTime": "08:00",
+      "endTime": "10:00",
+      "weekday": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "id": "slot-6",
+      "classroomId": "cls-b202",
+      "startTime": "10:00",
+      "endTime": "12:00",
+      "weekday": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "id": "slot-7",
+      "classroomId": "cls-b202",
+      "startTime": "14:00",
+      "endTime": "16:00",
+      "weekday": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "id": "slot-8",
+      "classroomId": "cls-b202",
+      "startTime": "16:00",
+      "endTime": "18:00",
+      "weekday": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "weekday": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "id": "slot-mql95z3gygjygj",
+      "classroomId": "cls-mql95z3b61341u"
+    }
+  ],
+  "closedDates": [],
+  "reservations": [
+    {
+      "id": "res-mql977tr9sd5fb",
+      "studentId": "stu-001",
+      "classroomId": "cls-mql95z3b61341u",
+      "seatId": "cls-mql95z3b61341u-seat-1-2",
+      "date": "2026-06-20",
+      "slotId": "slot-mql95z3gygjygj",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "status": "approved",
+      "createdAt": "2026-06-19T18:19:53.823Z",
+      "approvedBy": "admin-001",
+      "approvedAt": "2026-06-19T18:19:53.828Z"
+    },
+    {
+      "id": "res-mql95z4adp2c3h",
+      "studentId": "stu-002",
+      "classroomId": "cls-mql95z3b61341u",
+      "seatId": "cls-mql95z3b61341u-seat-1-1",
+      "date": "2026-06-19",
+      "slotId": "slot-mql95z3gygjygj",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "status": "pending",
+      "createdAt": "2026-06-19T18:18:55.882Z"
+    },
+    {
+      "id": "res-mql95z44c6dp6u",
+      "studentId": "stu-001",
+      "classroomId": "cls-mql95z3b61341u",
+      "seatId": "cls-mql95z3b61341u-seat-1-1",
+      "date": "2026-06-19",
+      "slotId": "slot-mql95z3gygjygj",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "status": "completed",
+      "createdAt": "2026-06-19T18:18:55.876Z",
+      "approvedBy": "admin-001",
+      "approvedAt": "2026-06-19T18:18:55.885Z",
+      "isLate": true,
+      "notCheckedOut": true
+    },
+    {
+      "id": "res-mql7sh6fzo5uli",
+      "studentId": "stu-001",
+      "classroomId": "cls-a101",
+      "seatId": "cls-a101-seat-1-1",
+      "date": "2026-06-22",
+      "slotId": "slot-1",
+      "startTime": "08:00",
+      "endTime": "10:00",
+      "status": "approved",
+      "createdAt": "2026-06-19T17:40:26.487Z",
+      "approvedBy": "admin-001",
+      "approvedAt": "2026-06-19T17:51:55.406Z"
+    }
+  ],
+  "violations": [
+    {
+      "id": "vio-mql95z4gnhgw1k",
+      "studentId": "stu-001",
+      "reservationId": "res-mql95z44c6dp6u",
+      "type": "no_show",
+      "description": "预约未签到",
+      "createdAt": "2026-06-19T18:18:55.888Z"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "mql9a17n2dpilc",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:22:05.219Z"
+    },
+    {
+      "id": "mql99ahg530ox8",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:21:30.580Z"
+    },
+    {
+      "id": "mql97zitok2vxx",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "签到失败",
+      "targetId": "res-mql977tr9sd5fb",
+      "success": false,
+      "reason": "非预约当日，无法签到",
+      "createdAt": "2026-06-19T18:20:29.717Z"
+    },
+    {
+      "id": "mql97zikfk5hep",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:20:29.708Z"
+    },
+    {
+      "id": "mql97zi5xrn84j",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:20:29.693Z"
+    },
+    {
+      "id": "mql977txqmsb8o",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "批准预约",
+      "targetId": "res-mql977tr9sd5fb",
+      "success": true,
+      "createdAt": "2026-06-19T18:19:53.829Z"
+    },
+    {
+      "id": "mql977ts8xe6f0",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "提交预约成功",
+      "targetId": "res-mql977tr9sd5fb",
+      "success": true,
+      "createdAt": "2026-06-19T18:19:53.824Z"
+    },
+    {
+      "id": "mql977ticurjp4",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:19:53.814Z"
+    },
+    {
+      "id": "mql977t6uv6s69",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:19:53.802Z"
+    },
+    {
+      "id": "mql95z4louuvsf",
+      "userId": "stu-002",
+      "userName": "李四",
+      "action": "签到失败",
+      "targetId": "res-mql95z44c6dp6u",
+      "success": false,
+      "reason": "不能替他人签到",
+      "createdAt": "2026-06-19T18:18:55.893Z"
+    },
+    {
+      "id": "mql95z4iu7c65n",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "批准预约失败",
+      "targetId": "res-mql95z4adp2c3h",
+      "success": false,
+      "reason": "同座位同时段已有批准的预约，无法重复批准",
+      "createdAt": "2026-06-19T18:18:55.890Z"
+    },
+    {
+      "id": "mql95z4en15v21",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "批准预约",
+      "targetId": "res-mql95z44c6dp6u",
+      "success": true,
+      "createdAt": "2026-06-19T18:18:55.886Z"
+    },
+    {
+      "id": "mql95z4byvr82g",
+      "userId": "stu-002",
+      "userName": "李四",
+      "action": "提交预约成功",
+      "targetId": "res-mql95z4adp2c3h",
+      "success": true,
+      "createdAt": "2026-06-19T18:18:55.883Z"
+    },
+    {
+      "id": "mql95z45xjgkws",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "提交预约成功",
+      "targetId": "res-mql95z44c6dp6u",
+      "success": true,
+      "createdAt": "2026-06-19T18:18:55.877Z"
+    },
+    {
+      "id": "mql95z412brql4",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "更新关闭日期",
+      "success": true,
+      "createdAt": "2026-06-19T18:18:55.873Z"
+    },
+    {
+      "id": "mql95z3sq6bbzf",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "提交预约失败",
+      "success": false,
+      "reason": "2026-06-20 为关闭日期（review-closed-day），不可预约",
+      "createdAt": "2026-06-19T18:18:55.864Z"
+    },
+    {
+      "id": "mql95z3m0rol7a",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "更新关闭日期",
+      "success": true,
+      "createdAt": "2026-06-19T18:18:55.858Z"
+    },
+    {
+      "id": "mql95z3hdfxgrg",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "更新开放时段",
+      "targetId": "cls-mql95z3b61341u",
+      "success": true,
+      "createdAt": "2026-06-19T18:18:55.853Z"
+    },
+    {
+      "id": "mql95z3dchhaze",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "创建教室",
+      "targetId": "cls-mql95z3b61341u",
+      "success": true,
+      "createdAt": "2026-06-19T18:18:55.849Z"
+    },
+    {
+      "id": "mql95z38mms2vs",
+      "userId": "stu-002",
+      "userName": "李四",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:18:55.844Z"
+    },
+    {
+      "id": "mql95z35ym4eyo",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:18:55.841Z"
+    },
+    {
+      "id": "mql95z2qqgvxjb",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:18:55.826Z"
+    },
+    {
+      "id": "mql878r4mgehpb",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "批准预约",
+      "targetId": "res-mql7sh6fzo5uli",
+      "success": true,
+      "createdAt": "2026-06-19T17:51:55.408Z"
+    },
+    {
+      "id": "mql7xco7a7cyrv",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T17:44:13.927Z"
+    },
+    {
+      "id": "mql7w86kcn7fd0",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "退出登录",
+      "success": true,
+      "createdAt": "2026-06-19T17:43:21.452Z"
+    },
+    {
+      "id": "mql7sh6hh84pi0",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "提交预约成功",
+      "targetId": "res-mql7sh6fzo5uli",
+      "success": true,
+      "createdAt": "2026-06-19T17:40:26.489Z"
+    },
+    {
+      "id": "mql71bfinnqjgk",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T17:19:19.326Z"
+    },
+    {
+      "id": "mql6z6rq8vn6cs",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T17:17:39.974Z"
+    }
+  ],
+  "config": {
+    "lateThresholdMinutes": 15,
+    "violationWarningThreshold": 3
+  }
+}
