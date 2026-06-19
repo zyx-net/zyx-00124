@@ -105,6 +105,26 @@ export const api = {
     a.click();
     URL.revokeObjectURL(url);
   },
+  downloadClosedDatesTemplate: async (mode: 'global' | 'classroom' = 'global') => {
+    const token = getToken();
+    const res = await fetch(`/api/classrooms/closed-dates/template?mode=${mode}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      let data: any;
+      try { data = await res.json(); } catch { data = { error: `HTTP ${res.status}` }; }
+      throw data;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = mode === 'classroom' ? 'closed-dates-template-classroom.csv' : 'closed-dates-template-global.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+  getClosedDatesSample: () =>
+    request<{ csv: string; description: string; expectedPreview: { total: number; newCount: number; invalidCount: number; duplicateCount: number } }>('/api/classrooms/closed-dates/sample'),
   previewClosedDatesImport: (csv: string) =>
     request<import('../../shared/types').ImportPreviewResult>('/api/classrooms/closed-dates/import/preview', {
       method: 'POST',

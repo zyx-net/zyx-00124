@@ -310,6 +310,49 @@ router.get('/closed-dates/export', authMiddleware, roleMiddleware('admin'), (_re
   logAudit(_req.currentUser!.id, _req.currentUser!.name, '导出关闭日期CSV', undefined, true);
 });
 
+router.get('/closed-dates/template', authMiddleware, roleMiddleware('admin'), (req: Request, res: Response): void => {
+  const mode = (req.query.mode as string) || 'global';
+  let csv: string;
+  let filename: string;
+  if (mode === 'classroom') {
+    csv = '日期,关闭原因,教室\n2026-01-01,元旦放假,cls-a101\n2026-02-17,设备检修,A101\n';
+    filename = 'closed-dates-template-classroom.csv';
+  } else {
+    csv = '日期,关闭原因\n2026-01-01,元旦放假\n2026-02-17,全校设备检修\n';
+    filename = 'closed-dates-template-global.csv';
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+  res.send('\uFEFF' + csv);
+  logAudit(req.currentUser!.id, req.currentUser!.name, `下载关闭日期CSV模板(${mode})`, undefined, true);
+});
+
+router.get('/closed-dates/sample', authMiddleware, roleMiddleware('admin'), (_req: Request, res: Response): void => {
+  const db = getDB();
+  const sampleClassroom = db.classrooms[0];
+  const classroomRef = sampleClassroom ? `${sampleClassroom.building} ${sampleClassroom.name}` : 'A101';
+  const classroomId = sampleClassroom?.id || 'cls-a101';
+  const csv = `日期,关闭原因,教室
+2026-07-01,建党节活动,${classroomId}
+2026-08-01,建军节训练,Z999
+2026-09-10,教师节活动,${classroomRef}
+2026-10-01,国庆维修,NOT-EXIST
+2026-11-11,双11活动,
+2026-12-25,圣诞活动,${classroomId}
+`;
+  res.json({
+    csv,
+    description: '样例包含 6 行数据：3 条有效（可新增）、2 条无效教室、1 条空教室。用于测试导入预览和错误提示。',
+    expectedPreview: {
+      total: 6,
+      newCount: 3,
+      invalidCount: 3,
+      duplicateCount: 0,
+    },
+  });
+  logAudit(_req.currentUser!.id, _req.currentUser!.name, '获取关闭日期样例数据', undefined, true);
+});
+
 router.post('/closed-dates/import/preview', authMiddleware, roleMiddleware('admin'), (req: Request, res: Response): void => {
   const { csv } = req.body as { csv?: string };
   if (!csv) {

@@ -694,6 +694,87 @@ async function main() {
     check(execR.status === 403, '学生执行导入返回 403', execR.status);
   }
 
+  // ----------------------------------------------------------------
+  // 21. 学生和未登录访问模板/样例 API 全部拦截
+  // ----------------------------------------------------------------
+  console.log('\n21. 权限控制：学生和未登录访问模板/样例 API 全部拦截');
+  {
+    const endpoints = [
+      ['GET', '/api/classrooms/closed-dates/template?mode=global'],
+      ['GET', '/api/classrooms/closed-dates/template?mode=classroom'],
+      ['GET', '/api/classrooms/closed-dates/sample'],
+    ];
+    for (const [method, path] of endpoints) {
+      const r1 = await requestRaw(method as any, path);
+      check(r1.status === 401, `未登录 ${method} ${path} → 401`, r1.status);
+      const r2 = await request(method as any, path, undefined, stu1Token);
+      check(r2.status === 403, `学生 ${method} ${path} → 403`, r2.status);
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // 22. 下载全局关闭模板：内容正确、响应头正确
+  // ----------------------------------------------------------------
+  console.log('\n22. 下载全局关闭模板：内容和响应头正确');
+  {
+    const r = await requestRaw('GET', '/api/classrooms/closed-dates/template?mode=global', adminToken);
+    check(r.status === 200, '全局模板 HTTP 200', r.status);
+    const ct = r.headers['content-type'] as string;
+    check(ct?.includes('text/csv'), 'Content-Type 为 text/csv', ct);
+    const cd = r.headers['content-disposition'] as string;
+    check(cd?.includes('attachment'), '含 attachment 下载头', cd);
+    check(cd?.includes('template-global'), '文件名含 template-global', cd);
+    const body = r.body.replace(/^\uFEFF/, '');
+    check(body.startsWith('日期,关闭原因'), '表头为「日期,关闭原因」', body.split('\n')[0]);
+    check(body.includes('2026-01-01,元旦放假'), '含示例数据行', body);
+  }
+
+  // ----------------------------------------------------------------
+  // 23. 下载指定教室模板：内容正确、响应头正确
+  // ----------------------------------------------------------------
+  console.log('\n23. 下载指定教室模板：内容和响应头正确');
+  {
+    const r = await requestRaw('GET', '/api/classrooms/closed-dates/template?mode=classroom', adminToken);
+    check(r.status === 200, '指定教室模板 HTTP 200', r.status);
+    const cd = r.headers['content-disposition'] as string;
+    check(cd?.includes('template-classroom'), '文件名含 template-classroom', cd);
+    const body = r.body.replace(/^\uFEFF/, '');
+    check(body.startsWith('日期,关闭原因,教室'), '表头为三列', body.split('\n')[0]);
+    check(body.includes('2026-01-01,元旦放假,cls-a101'), '含示例数据行（带教室 ID）', body);
+    check(body.includes('2026-02-17,设备检修,A101'), '含示例数据行（带教室名称）', body);
+  }
+
+  // ----------------------------------------------------------------
+  // 24. 获取样例数据：内容与预期一致，可直接用于预览测试
+  // ----------------------------------------------------------------
+  console.log('\n24. 获取样例数据：返回结构化数据，包含预期校验结果');
+  {
+    const r = await request('GET', '/api/classrooms/closed-dates/sample', undefined, adminToken);
+    check(r.status === 200, '样例数据 HTTP 200', r.status);
+    check(!!r.data.csv, '返回 csv 字段', !!r.data.csv);
+    check(!!r.data.description, '返回 description 字段', !!r.data.description);
+    check(r.data.expectedPreview.total === 6, 'expectedPreview.total = 6', r.data.expectedPreview.total);
+    check(r.data.expectedPreview.newCount === 3, 'expectedPreview.newCount = 3', r.data.expectedPreview.newCount);
+    check(r.data.expectedPreview.invalidCount === 3, 'expectedPreview.invalidCount = 3', r.data.expectedPreview.invalidCount);
+
+    const previewR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: r.data.csv }, adminToken);
+    check(previewR.data.total === r.data.expectedPreview.total, '样例数据实际预览 total 与 expectedPreview 一致', previewR.data.total);
+    check(previewR.data.newCount === r.data.expectedPreview.newCount, '样例数据实际预览 newCount 与 expectedPreview 一致', previewR.data.newCount);
+    check(previewR.data.invalidCount === r.data.expectedPreview.invalidCount, '样例数据实际预览 invalidCount 与 expectedPreview 一致', previewR.data.invalidCount);
+  }
+
+  // ----------------------------------------------------------------
+  // 25. 审计日志：模板下载和样例获取都有记录
+  // ----------------------------------------------------------------
+  console.log('\n25. 审计日志：模板下载和样例获取都有完整记录');
+  {
+    const logsR = await request('GET', '/api/audit-logs', undefined, adminToken);
+    const logs: any[] = logsR.data || [];
+    check(logs.some((l) => l.action?.includes('下载关闭日期CSV模板')), '有模板下载审计日志');
+    check(logs.some((l) => l.action?.includes('global') || l.action?.includes('classroom')), '模板日志含 mode 信息');
+    check(logs.some((l) => l.action?.includes('获取关闭日期样例数据')), '有样例数据获取审计日志');
+  }
+
   console.log(`\n=== 关闭日期批量导入回归测试结果：${passCount} 通过 / ${failCount} 失败 ===\n`);
   if (failCount > 0) process.exit(1);
 }

@@ -2,6 +2,44 @@
 
 一个完整的自习教室座位预约、审批、签到签退与统计管理系统。前后端一体化，数据持久化存储，重启后状态保持一致。
 
+## 🚀 一键验证：教室停课日批量导入完整链路
+
+> **3 分钟跑通全部能力，不用猜步骤**
+
+### 前置条件
+```bash
+# 1. 启动服务
+npm run dev
+
+# 2. 新开终端，运行自动化验证（包含真正服务重启）
+npm run test:closed-dates
+```
+
+### 或手动走完闭环（浏览器操作）
+
+| 步骤 | 操作 | 预期结果 |
+|------|------|---------|
+| 1 | 访问 http://localhost:5173，使用 `admin / admin123` 登录 | 进入系统仪表盘 |
+| 2 | 左侧菜单 → 教室配置 → 点击任意教室 → 切换到「关闭日期」标签 | 看到关闭日期列表和操作按钮 |
+| 3 | 点击「批量导入」→ 点击「下载模板：指定教室模式」 | 下载 `closed-dates-template-classroom.csv` |
+| 4 | 点击「填充样例数据」→ 自动填入 6 行测试数据 | 文本框出现 CSV 内容（含 3 条有效 + 3 条无效） |
+| 5 | 点击「预览导入结果」 | 显示：`总行数 6 / 可新增 3 / 重复 0 / 无效 3` |
+| 6 | 点击「确认导入 (3 条)」 | 导入成功，列表新增 3 条，顶部出现「撤销上次导入 (3 条)」按钮 |
+| 7 | 点击「导出 CSV」 | 下载 `closed-dates-xxx.csv`，含 3 条数据 |
+| 8 | 再次打开「批量导入」→ 上传刚导出的 CSV → 预览 | `3 条全部显示为重复（duplicateCount = 3）`，证明导入导出闭环一致 |
+| 9 | **真实重启验证**：停止后端服务（Ctrl+C）→ `npm run server:dev` 重启 → 刷新页面重新登录 | 「撤销上次导入」按钮仍在，数据和快照完整 |
+| 10 | 点击「撤销上次导入 (3 条)」 | 3 条记录消失，按钮隐藏，导出 CSV 回到导入前状态 |
+| 11 | 左侧菜单 → 历史记录 → 操作日志 | 可见「预览、批量导入、导出 CSV、下载模板、撤销」共 5+ 条审计记录 |
+| 12 | 退出 → 使用 `student01 / 123456` 登录 → 直接访问 `/classrooms` | 自动跳回仪表盘，无配置权限 |
+
+### 也可运行 PowerShell 脚本验证（Windows）
+```powershell
+cd d:\workSpace\AI__SPACE\zyx-00124
+powershell -ExecutionPolicy Bypass -File test-batch-import.ps1
+```
+
+---
+
 ## 功能特性
 
 ### 核心业务链路
@@ -185,6 +223,9 @@ npm run check
 | GET | `/api/classrooms/closed-dates/list` | 关闭日期列表 | 登录 |
 | PUT | `/api/classrooms/closed-dates/batch` | 手动更新关闭日期 | 管理员 |
 | GET | `/api/classrooms/closed-dates/export` | 导出关闭日期 CSV | 管理员 |
+| GET | `/api/classrooms/closed-dates/template?mode=global` | 下载全局关闭模板 CSV | 管理员 |
+| GET | `/api/classrooms/closed-dates/template?mode=classroom` | 下载指定教室模板 CSV | 管理员 |
+| GET | `/api/classrooms/closed-dates/sample` | 获取样例数据（含预期校验结果） | 管理员 |
 | POST | `/api/classrooms/closed-dates/import/preview` | 批量导入预览 | 管理员 |
 | POST | `/api/classrooms/closed-dates/import/execute` | 批量导入执行 | 管理员 |
 | POST | `/api/classrooms/closed-dates/import/undo` | 撤销最近一次批量导入 | 管理员 |

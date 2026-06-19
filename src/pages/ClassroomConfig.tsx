@@ -83,6 +83,8 @@ export default function ClassroomConfig() {
   const [importSkipDuplicates, setImportSkipDuplicates] = useState(true);
   const [lastImportSnapshot, setLastImportSnapshot] = useState<ClosedDateImportSnapshot | null>(null);
   const [lastImportResult, setLastImportResult] = useState<ImportExecuteResult | null>(null);
+  const [sampleLoading, setSampleLoading] = useState(false);
+  const [templateLoading, setTemplateLoading] = useState<'global' | 'classroom' | null>(null);
 
   useEffect(() => {
     fetchClassrooms();
@@ -347,6 +349,32 @@ export default function ClassroomConfig() {
     setImportCsvText('');
     setImportPreview(null);
     setImportModalOpen(true);
+  };
+
+  const handleDownloadTemplate = async (mode: 'global' | 'classroom') => {
+    setTemplateLoading(mode);
+    try {
+      await api.downloadClosedDatesTemplate(mode);
+      show('success', `已下载${mode === 'classroom' ? '指定教室' : '全局关闭'}模板`);
+    } catch (err: any) {
+      show('error', err?.error || '下载模板失败');
+    } finally {
+      setTemplateLoading(null);
+    }
+  };
+
+  const handleFillSampleData = async () => {
+    setSampleLoading(true);
+    try {
+      const sample = await api.getClosedDatesSample();
+      setImportCsvText(sample.csv);
+      setImportPreview(null);
+      show('success', '已填充样例数据，可点击「预览导入结果」查看效果');
+    } catch (err: any) {
+      show('error', err?.error || '获取样例数据失败');
+    } finally {
+      setSampleLoading(false);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1191,8 +1219,8 @@ export default function ClassroomConfig() {
 
               <div className="space-y-2">
                 <label className="label">选择 CSV 文件</label>
-                <div className="flex gap-2">
-                  <label className="btn-secondary cursor-pointer flex-1 flex items-center justify-center gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <label className="btn-secondary cursor-pointer flex-1 min-w-[120px] flex items-center justify-center gap-2">
                     <Upload className="w-4 h-4" />
                     选择文件
                     <input
@@ -1200,11 +1228,38 @@ export default function ClassroomConfig() {
                       accept=".csv,text/csv"
                       onChange={handleFileUpload}
                       className="hidden"
-                      disabled={importExecuting || importPreviewLoading}
+                      disabled={importExecuting || importPreviewLoading || sampleLoading || templateLoading !== null}
                     />
                   </label>
+                  <button
+                    onClick={handleFillSampleData}
+                    disabled={importExecuting || importPreviewLoading || sampleLoading || templateLoading !== null}
+                    className="btn-secondary flex items-center gap-2 text-blue-700 border-blue-300 hover:bg-blue-50"
+                  >
+                    {sampleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                    填充样例数据
+                  </button>
                 </div>
-                <div className="text-xs text-zinc-500">或直接在下方粘贴 CSV 内容</div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="text-zinc-500">下载模板：</span>
+                  <button
+                    onClick={() => handleDownloadTemplate('global')}
+                    disabled={importExecuting || importPreviewLoading || sampleLoading || templateLoading !== null}
+                    className="text-brand-600 hover:underline disabled:text-zinc-400 disabled:no-underline flex items-center gap-1"
+                  >
+                    {templateLoading === 'global' && <Loader2 className="w-3 h-3 animate-spin" />}
+                    全局关闭模式
+                  </button>
+                  <span className="text-zinc-300">|</span>
+                  <button
+                    onClick={() => handleDownloadTemplate('classroom')}
+                    disabled={importExecuting || importPreviewLoading || sampleLoading || templateLoading !== null}
+                    className="text-brand-600 hover:underline disabled:text-zinc-400 disabled:no-underline flex items-center gap-1"
+                  >
+                    {templateLoading === 'classroom' && <Loader2 className="w-3 h-3 animate-spin" />}
+                    指定教室模式
+                  </button>
+                </div>
               </div>
 
               <div>
