@@ -73,7 +73,7 @@ router.get('/students', authMiddleware, (req: Request, res: Response): void => {
   res.json(getStudentStats());
 });
 
-router.get('/classrooms', authMiddleware, (req: Request, res: Response): void => {
+router.get('/classroom-stats', authMiddleware, (req: Request, res: Response): void => {
   processMissedCheckouts();
   res.json(getClassroomStats());
 });

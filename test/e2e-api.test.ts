@@ -209,7 +209,7 @@ async function main() {
     );
 
     // 教室维度也验证
-    const classR = await request('GET', '/api/classrooms', undefined, adminToken);
+    const classR = await request('GET', '/api/classroom-stats', undefined, adminToken);
     const cls = (classR.data as any[]).find((c: any) => c.classroomId === 'cls-a101');
     console.log(`     教室 A101: 预约=${cls?.totalReservations} 完成=${cls?.completedCount}`);
   }

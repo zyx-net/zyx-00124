@@ -640,6 +640,38 @@
   ],
   "auditLogs": [
     {
+      "id": "mqlaq0ge6vccwb",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T19:02:30.350Z"
+    },
+    {
+      "id": "mqlami71l5gy38",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:59:46.717Z"
+    },
+    {
+      "id": "mqlaj42uddg5ms",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:57:08.454Z"
+    },
+    {
+      "id": "mqlaisa68rk4rf",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:56:53.166Z"
+    },
+    {
       "id": "mqla63hpn8otpn",
       "userId": "admin-001",
       "userName": "系统管理员",
