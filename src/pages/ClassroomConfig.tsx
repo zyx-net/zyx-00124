@@ -318,8 +318,10 @@ export default function ClassroomConfig() {
     }
   };
 
-  const removeClosedDate = async (date: string) => {
-    const newDates = closedDates.filter((d) => d.date !== date);
+  const removeClosedDate = async (date: string, classroomId?: string) => {
+    const newDates = closedDates.filter(
+      (d) => !(d.date === date && d.classroomId === classroomId),
+    );
     setClosedSaving(true);
     try {
       const data = await api.updateClosedDates(newDates);
@@ -673,7 +675,10 @@ export default function ClassroomConfig() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
                     <Info className="w-4 h-4" />
-                    <span>CSV 格式：日期,关闭原因（如 2026-01-01,元旦），支持中英文表头</span>
+                    <span>
+                      CSV 格式：<code className="px-1 rounded bg-zinc-100">日期,关闭原因</code>（全局关闭）或
+                      <code className="px-1 rounded bg-zinc-100">日期,关闭原因,教室</code>（指定教室），支持中英文表头
+                    </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button onClick={handleExportClosedDates} className="btn-secondary">
@@ -766,6 +771,11 @@ export default function ClassroomConfig() {
                           <th className="text-left px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
                             星期
                           </th>
+                          {closedDates.some((d) => d.classroomId) && (
+                            <th className="text-left px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                              教室
+                            </th>
+                          )}
                           <th className="text-left px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
                             关闭原因
                           </th>
@@ -775,28 +785,45 @@ export default function ClassroomConfig() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100">
-                        {closedDates.map((cd) => (
-                          <tr key={cd.date} className="hover:bg-zinc-50 transition">
-                            <td className="px-5 py-3 text-sm font-medium text-zinc-800">
-                              {cd.date}
-                            </td>
-                            <td className="px-5 py-3 text-sm text-zinc-600">
-                              {weekdayName(new Date(cd.date).getDay())}
-                            </td>
-                            <td className="px-5 py-3 text-sm text-zinc-600">
-                              {cd.reason}
-                            </td>
-                            <td className="px-5 py-3 text-right">
-                              <button
-                                onClick={() => removeClosedDate(cd.date)}
-                                disabled={closedSaving}
-                                className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {closedDates.map((cd) => {
+                          const classroom = cd.classroomId
+                            ? classrooms.find((c) => c.id === cd.classroomId)
+                            : null;
+                          return (
+                            <tr
+                              key={`${cd.date}-${cd.classroomId || 'global'}`}
+                              className="hover:bg-zinc-50 transition"
+                            >
+                              <td className="px-5 py-3 text-sm font-medium text-zinc-800">
+                                {cd.date}
+                              </td>
+                              <td className="px-5 py-3 text-sm text-zinc-600">
+                                {weekdayName(new Date(cd.date).getDay())}
+                              </td>
+                              {closedDates.some((d) => d.classroomId) && (
+                                <td className="px-5 py-3 text-sm text-zinc-600">
+                                  {classroom
+                                    ? `${classroom.building} ${classroom.name}`
+                                    : cd.classroomId
+                                      ? `<${cd.classroomId}>`
+                                      : '全部教室'}
+                                </td>
+                              )}
+                              <td className="px-5 py-3 text-sm text-zinc-600">
+                                {cd.reason}
+                              </td>
+                              <td className="px-5 py-3 text-right">
+                                <button
+                                  onClick={() => removeClosedDate(cd.date, cd.classroomId)}
+                                  disabled={closedSaving}
+                                  className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1150,8 +1177,15 @@ export default function ClassroomConfig() {
                 <FileText className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-blue-800 space-y-1">
                   <div className="font-medium">CSV 格式要求</div>
-                  <div>表头：<code className="px-1 rounded bg-blue-100">日期,关闭原因</code> 或 <code className="px-1 rounded bg-blue-100">date,reason</code></div>
-                  <div>示例：<code className="px-1 rounded bg-blue-100">2026-01-01,元旦</code>、<code className="px-1 rounded bg-blue-100">2026-02-17,教室设备检修</code></div>
+                  <div>
+                    <div className="mb-1">全局关闭（所有教室）：</div>
+                    <code className="px-1 rounded bg-blue-100">日期,关闭原因</code> 或 <code className="px-1 rounded bg-blue-100">date,reason</code>
+                  </div>
+                  <div>
+                    <div className="mb-1">指定教室关闭：</div>
+                    <code className="px-1 rounded bg-blue-100">日期,关闭原因,教室</code>（教室可填编号、名称或楼栋+名称，如 cls-a101、A101、A栋教学楼 A101）
+                  </div>
+                  <div>示例：<code className="px-1 rounded bg-blue-100">2026-01-01,元旦</code>、<code className="px-1 rounded bg-blue-100">2026-02-17,设备检修,cls-a101</code></div>
                 </div>
               </div>
 
@@ -1233,6 +1267,9 @@ export default function ClassroomConfig() {
                         <tr>
                           <th className="text-left px-3 py-2 font-medium text-zinc-500">行号</th>
                           <th className="text-left px-3 py-2 font-medium text-zinc-500">日期</th>
+                          {importPreview.rows.some((r) => r.classroomName || r.classroomId) && (
+                            <th className="text-left px-3 py-2 font-medium text-zinc-500">教室</th>
+                          )}
                           <th className="text-left px-3 py-2 font-medium text-zinc-500">原因</th>
                           <th className="text-left px-3 py-2 font-medium text-zinc-500">状态</th>
                         </tr>
@@ -1242,6 +1279,11 @@ export default function ClassroomConfig() {
                           <tr key={r.line} className="hover:bg-zinc-50">
                             <td className="px-3 py-2 text-zinc-500">{r.line}</td>
                             <td className="px-3 py-2 font-mono text-zinc-800">{r.date || '-'}</td>
+                            {importPreview.rows.some((rr) => rr.classroomName || rr.classroomId) && (
+                              <td className="px-3 py-2 text-zinc-700">
+                                {r.classroomName || r.classroomId || '-'}
+                              </td>
+                            )}
                             <td className="px-3 py-2 text-zinc-700 truncate max-w-[200px]" title={r.reason}>{r.reason || '-'}</td>
                             <td className="px-3 py-2">
                               {r.status === 'new' && (

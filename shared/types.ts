@@ -39,6 +39,7 @@ export interface TimeSlot {
 export interface ClosedDate {
   date: string;
   reason: string;
+  classroomId?: string;
 }
 
 export type ImportRowStatus = 'new' | 'duplicate' | 'invalid';
@@ -47,6 +48,8 @@ export interface ImportPreviewRow {
   line: number;
   date: string;
   reason: string;
+  classroomId?: string;
+  classroomName?: string;
   status: ImportRowStatus;
   message?: string;
 }

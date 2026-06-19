@@ -95,6 +95,29 @@ const SAMPLE_CSV_EN_HEADER = `date,reason
 2026-06-01,儿童节
 `;
 
+const SAMPLE_CSV_WITH_CLASSROOM = `日期,关闭原因,教室
+2026-07-01,建党节-A101,cls-a101
+2026-08-01,建军节-Z999,Z999
+2026-09-10,教师节-B202,cls-b202
+2026-10-01,国庆-不存在,NOT-EXIST
+2026-11-11,双11-空教室,
+2026-12-25,圣诞-A101-2,cls-a101
+`;
+
+const SAMPLE_CSV_CLASSROOM_MATCH_MODES = `日期,关闭原因,classroomId
+2026-07-01,方式1-id,cls-a101
+2026-08-01,方式2-名称,A101
+2026-09-01,方式3-楼栋+名称,A栋教学楼 A101
+2026-10-01,方式4-B202,B202
+2026-11-01,方式5-无效,Z999
+`;
+
+const SAMPLE_CSV_SAME_CLASSROOM_DUP = `日期,关闭原因,教室
+2026-07-01,上午,A101
+2026-07-01,下午,A101
+2026-07-01,全局,
+`;
+
 async function main() {
   console.log('\n=== 关闭日期批量导入导出回归测试 ===\n');
 
@@ -353,6 +376,170 @@ async function main() {
     check(logs.some((l) => l.action?.includes('撤销关闭日期批量导入')), '有"撤销关闭日期批量导入"审计日志');
     check(logs.every((l) => typeof l.success === 'boolean'), '每条日志都有 success 字段');
     check(logs.some((l) => l.action?.includes('权限不足')) === false, 'admin 操作没有权限不足日志');
+  }
+
+  // ----------------------------------------------------------------
+  // 11. 教室列预览校验：不存在的教室标记 invalid
+  // ----------------------------------------------------------------
+  console.log('\n11. 教室列预览校验：不存在的教室标记 invalid，不能进新增队列');
+  {
+    const previewR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: SAMPLE_CSV_WITH_CLASSROOM }, adminToken);
+    check(previewR.data.total === 6, '6 条输入', previewR.data.total);
+    check(previewR.data.newCount === 3, '可新增 = 3（cls-a101 两个不同日期 + cls-b202）', previewR.data.newCount);
+    check(previewR.data.invalidCount === 3, '无效 = 3（Z999、NOT-EXIST、空教室）', previewR.data.invalidCount);
+    check(previewR.data.duplicateCount === 0, '重复 = 0', previewR.data.duplicateCount);
+
+    const z999Row = previewR.data.rows.find((r: any) => r.date === '2026-08-01');
+    check(z999Row?.status === 'invalid', 'Z999 状态 = invalid', z999Row?.status);
+    check(z999Row?.message?.includes('Z999'), 'Z999 错误信息包含教室名称', z999Row?.message);
+    check(z999Row?.message?.includes('教室'), 'Z999 错误信息包含"教室"字样', z999Row?.message);
+
+    const notExistRow = previewR.data.rows.find((r: any) => r.date === '2026-10-01');
+    check(notExistRow?.status === 'invalid', 'NOT-EXIST 状态 = invalid', notExistRow?.status);
+
+    const emptyRow = previewR.data.rows.find((r: any) => r.date === '2026-11-11');
+    check(emptyRow?.status === 'invalid', '空教室状态 = invalid', emptyRow?.status);
+    check(emptyRow?.message?.includes('教室不能为空'), '空教室错误提示正确', emptyRow?.message);
+
+    const validRow = previewR.data.rows.find((r: any) => r.date === '2026-07-01');
+    check(validRow?.status === 'new', '有效 cls-a101 状态 = new', validRow?.status);
+    check(validRow?.classroomId === 'cls-a101', '有效行 classroomId 正确', validRow?.classroomId);
+    check(validRow?.classroomName?.includes('A101'), '有效行带 classroomName', validRow?.classroomName);
+  }
+
+  // ----------------------------------------------------------------
+  // 12. 执行导入：无效教室不会写入数据库
+  // ----------------------------------------------------------------
+  console.log('\n12. 执行导入：无效教室不会写入数据库，只有有效记录新增');
+  {
+    // 先清空
+    await request('PUT', '/api/classrooms/closed-dates/batch', { dates: [] }, adminToken);
+
+    const execR = await request('POST', '/api/classrooms/closed-dates/import/execute', { csv: SAMPLE_CSV_WITH_CLASSROOM }, adminToken);
+    check(execR.data.success === true, '导入成功', execR.data.success);
+    check(execR.data.added === 3, '实际新增 = 3', execR.data.added);
+    check(execR.data.failed === 3, '失败 = 3', execR.data.failed);
+    check(execR.data.rows.length === 6, '6 条结果明细', execR.data.rows.length);
+
+    // 验证数据库
+    const listR = await request('GET', '/api/classrooms/closed-dates/list', undefined, adminToken);
+    check(listR.data.length === 3, '数据库中只有 3 条', listR.data.length);
+    const datesInDB = listR.data.map((d: any) => d.date).sort();
+    check(JSON.stringify(datesInDB) === JSON.stringify(['2026-07-01', '2026-09-10', '2026-12-25']), '写入的日期正确', datesInDB);
+    check(!listR.data.some((d: any) => d.date === '2026-08-01'), 'Z999 未写入');
+    check(!listR.data.some((d: any) => d.date === '2026-10-01'), 'NOT-EXIST 未写入');
+    check(!listR.data.some((d: any) => d.date === '2026-11-11'), '空教室未写入');
+
+    // 验证 classroomId 字段写入
+    const july1 = listR.data.find((d: any) => d.date === '2026-07-01');
+    check(july1?.classroomId === 'cls-a101', '写入的记录带 classroomId', july1?.classroomId);
+  }
+
+  // ----------------------------------------------------------------
+  // 13. 导出：带 classroomId 的记录导出时带出教室列
+  // ----------------------------------------------------------------
+  console.log('\n13. 导出：有 classroomId 的记录导出时带出教室列');
+  {
+    const exportR = await request('GET', '/api/classrooms/closed-dates/export', undefined, adminToken);
+    check(exportR.status === 200, '导出 200', exportR.status);
+    check(exportR.data.includes('日期,关闭原因,教室'), '导出包含教室列头', exportR.data.includes('日期,关闭原因,教室'));
+    check(exportR.data.includes('A栋教学楼 A101'), '导出包含教室名称', exportR.data.includes('A栋教学楼 A101'));
+  }
+
+  // ----------------------------------------------------------------
+  // 14. 导入导出一致性：导出的 CSV 能正确再导入
+  // ----------------------------------------------------------------
+  console.log('\n14. 导入导出一致性：导出的 CSV 能正确再导入');
+  {
+    const exportR = await request('GET', '/api/classrooms/closed-dates/export', undefined, adminToken);
+    const previewR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: exportR.data }, adminToken);
+    check(previewR.data.duplicateCount === 3, '导出后再预览：3 条都重复（在 DB 中）', previewR.data.duplicateCount);
+    check(previewR.data.invalidCount === 0, '导出后再预览：无无效记录', previewR.data.invalidCount);
+  }
+
+  // ----------------------------------------------------------------
+  // 15. 撤销：只恢复实际导入的记录，不恢复无效行
+  // ----------------------------------------------------------------
+  console.log('\n15. 撤销：只恢复实际导入的记录，不恢复无效行');
+  {
+    const undoR = await request('POST', '/api/classrooms/closed-dates/import/undo', undefined, adminToken);
+    check(undoR.data.success === true, '撤销成功', undoR.data.success);
+    check(undoR.data.restoredCount === 3, '撤销恢复 3 条', undoR.data.restoredCount);
+
+    const listR = await request('GET', '/api/classrooms/closed-dates/list', undefined, adminToken);
+    check(listR.data.length === 0, '撤销后数据库为空', listR.data.length);
+  }
+
+  // ----------------------------------------------------------------
+  // 16. 多种教室匹配方式（id、名称、楼栋+名称）
+  // ----------------------------------------------------------------
+  console.log('\n16. 多种教室匹配方式：id、名称、楼栋+名称都支持');
+  {
+    const previewR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: SAMPLE_CSV_CLASSROOM_MATCH_MODES }, adminToken);
+    check(previewR.data.newCount === 4, '4 种匹配方式都成功', previewR.data.newCount);
+    check(previewR.data.invalidCount === 1, 'Z999 无效', previewR.data.invalidCount);
+
+    const byId = previewR.data.rows.find((r: any) => r.date === '2026-07-01');
+    check(byId?.classroomId === 'cls-a101', 'id 匹配正确', byId?.classroomId);
+
+    const byName = previewR.data.rows.find((r: any) => r.date === '2026-08-01');
+    check(byName?.classroomId === 'cls-a101', '名称匹配正确', byName?.classroomId);
+
+    const byFull = previewR.data.rows.find((r: any) => r.date === '2026-09-01');
+    check(byFull?.classroomId === 'cls-a101', '楼栋+名称匹配正确', byFull?.classroomId);
+
+    const byB202 = previewR.data.rows.find((r: any) => r.date === '2026-10-01');
+    check(byB202?.classroomId === 'cls-b202', 'B202 名称匹配正确', byB202?.classroomId);
+  }
+
+  // ----------------------------------------------------------------
+  // 17. 同批内同教室同日重复检测
+  // ----------------------------------------------------------------
+  console.log('\n17. 同批内同教室同日重复检测');
+  {
+    const previewR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: SAMPLE_CSV_SAME_CLASSROOM_DUP }, adminToken);
+    check(previewR.data.newCount === 1, '可新增 = 1（仅第一条）', previewR.data.newCount);
+    check(previewR.data.duplicateCount === 1, '重复 = 1（同教室同日第二条）', previewR.data.duplicateCount);
+    check(previewR.data.invalidCount === 1, '无效 = 1（有教室列但教室为空）', previewR.data.invalidCount);
+
+    const dupRow = previewR.data.rows.find((r: any) => r.line === 3);
+    check(dupRow?.status === 'duplicate', '第二条同教室同日为 duplicate', dupRow?.status);
+    check(dupRow?.message?.includes('日期已有关闭记录') || dupRow?.message?.includes('已有关闭记录'), '重复提示正确', dupRow?.message);
+
+    const emptyRow = previewR.data.rows.find((r: any) => r.line === 4);
+    check(emptyRow?.status === 'invalid', '第三条空教室为 invalid', emptyRow?.status);
+  }
+
+  // ----------------------------------------------------------------
+  // 18. 不带教室列时保持全局逻辑
+  // ----------------------------------------------------------------
+  console.log('\n18. 不带教室列时保持全局逻辑（向后兼容）');
+  {
+    const previewR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: SAMPLE_CSV_VALID }, adminToken);
+    check(previewR.data.newCount === 4, '不带教室列时 new = 4', previewR.data.newCount);
+    check(previewR.data.invalidCount === 0, '不带教室列时无 invalid', previewR.data.invalidCount);
+
+    // 执行后验证无 classroomId
+    const execR = await request('POST', '/api/classrooms/closed-dates/import/execute', { csv: SAMPLE_CSV_VALID, skipDuplicates: true }, adminToken);
+    check(execR.data.added === 4, '不带教室列时新增 4 条', execR.data.added);
+
+    const listR = await request('GET', '/api/classrooms/closed-dates/list', undefined, adminToken);
+    check(listR.data.every((d: any) => !d.classroomId), '全局关闭记录无 classroomId 字段', listR.data.map((d:any) => d.classroomId));
+
+    // 清理
+    await request('POST', '/api/classrooms/closed-dates/import/undo', undefined, adminToken);
+  }
+
+  // ----------------------------------------------------------------
+  // 19. 学生无权限访问教室列相关导入
+  // ----------------------------------------------------------------
+  console.log('\n19. 学生无权限：带教室列的导入学生也无法访问');
+  {
+    const prevR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: SAMPLE_CSV_WITH_CLASSROOM }, stu1Token);
+    check(prevR.status === 403, '学生预览返回 403', prevR.status);
+
+    const execR = await request('POST', '/api/classrooms/closed-dates/import/execute', { csv: SAMPLE_CSV_WITH_CLASSROOM }, stu1Token);
+    check(execR.status === 403, '学生执行导入返回 403', execR.status);
   }
 
   console.log(`\n=== 关闭日期批量导入回归测试结果：${passCount} 通过 / ${failCount} 失败 ===\n`);

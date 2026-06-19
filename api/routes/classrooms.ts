@@ -193,7 +193,11 @@ function parseCSV(text: string): string[][] {
   return lines;
 }
 
-function buildPreview(csvText: string, existingDates: Set<string>): ImportPreviewResult {
+function buildPreview(
+  csvText: string,
+  existingDates: Set<string>,
+  existingClassrooms: Classroom[],
+): ImportPreviewResult {
   const rows = parseCSV(csvText.replace(/^\uFEFF/, ''));
   if (rows.length === 0) {
     return { total: 0, newCount: 0, duplicateCount: 0, invalidCount: 0, rows: [] };
@@ -201,6 +205,19 @@ function buildPreview(csvText: string, existingDates: Set<string>): ImportPrevie
   const header = rows[0].map((h) => h.trim().toLowerCase());
   const dateIdx = header.findIndex((h) => h === 'date' || h === '日期');
   const reasonIdx = header.findIndex((h) => h === 'reason' || h === '关闭原因' || h === '原因');
+  const classroomIdIdx = header.findIndex(
+    (h) => h === 'classroomid' || h === 'classroom' || h === '教室' || h === '教室编号' || h === '教室id',
+  );
+  const hasClassroomCol = classroomIdIdx >= 0;
+
+  const classroomMap = new Map<string, Classroom>();
+  for (const c of existingClassrooms) {
+    classroomMap.set(c.id.toLowerCase(), c);
+    classroomMap.set(c.name.toLowerCase(), c);
+    classroomMap.set(`${c.building}${c.name}`.toLowerCase(), c);
+    classroomMap.set(`${c.building} ${c.name}`.toLowerCase(), c);
+  }
+
   const previewRows: ImportPreviewRow[] = [];
   const seenInBatch = new Set<string>();
   for (let i = 1; i < rows.length; i++) {
@@ -208,22 +225,48 @@ function buildPreview(csvText: string, existingDates: Set<string>): ImportPrevie
     const lineNum = i + 1;
     const rawDate = (dateIdx >= 0 ? raw[dateIdx] : raw[0] || '').trim();
     const rawReason = (reasonIdx >= 0 ? raw[reasonIdx] : raw[1] || '').trim();
+    const rawClassroom = hasClassroomCol ? (raw[classroomIdIdx] || '').trim() : undefined;
+
     const errors: string[] = [];
     let status: ImportPreviewRow['status'] = 'new';
+    let classroomId: string | undefined;
+    let classroomName: string | undefined;
+
     if (!isValidDateStr(rawDate)) errors.push('日期格式错误（应为 YYYY-MM-DD）');
     if (!rawReason) errors.push('关闭原因不能为空');
+
+    if (hasClassroomCol) {
+      if (!rawClassroom) {
+        errors.push('教室不能为空');
+      } else {
+        const matched = classroomMap.get(rawClassroom.toLowerCase());
+        if (!matched) {
+          errors.push(`教室 "${rawClassroom}" 不存在`);
+        } else {
+          classroomId = matched.id;
+          classroomName = `${matched.building} ${matched.name}`;
+        }
+      }
+    }
+
     if (errors.length > 0) {
       status = 'invalid';
-    } else if (existingDates.has(rawDate) || seenInBatch.has(rawDate)) {
-      status = 'duplicate';
-      errors.push('日期已存在');
     } else {
-      seenInBatch.add(rawDate);
+      const dupKey = hasClassroomCol && classroomId ? `${rawDate}|${classroomId}` : rawDate;
+      if (existingDates.has(dupKey) || seenInBatch.has(dupKey)) {
+        status = 'duplicate';
+        errors.push(hasClassroomCol ? `${classroomName} 在该日期已有关闭记录` : '日期已存在');
+      } else {
+        seenInBatch.add(dupKey);
+      }
     }
+
     previewRows.push({
       line: lineNum,
       date: rawDate,
       reason: rawReason,
+      classroomId,
+      classroomName,
       status,
       message: errors.join('；') || undefined,
     });
@@ -237,19 +280,30 @@ function buildPreview(csvText: string, existingDates: Set<string>): ImportPrevie
   };
 }
 
-function closedDatesToCSV(list: ClosedDate[]): string {
+function closedDatesToCSV(list: ClosedDate[], classrooms: Classroom[]): string {
   const escape = (s: string) => {
     if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
     return s;
   };
-  const lines = ['日期,关闭原因'];
-  for (const cd of list) lines.push(`${escape(cd.date)},${escape(cd.reason)}`);
+  const hasClassroomIds = list.some((cd) => cd.classroomId);
+  const classroomMap = new Map(classrooms.map((c) => [c.id, c]));
+
+  const header = hasClassroomIds ? ['日期', '关闭原因', '教室'] : ['日期', '关闭原因'];
+  const lines = [header.join(',')];
+  for (const cd of list) {
+    const row = [escape(cd.date), escape(cd.reason)];
+    if (hasClassroomIds) {
+      const c = cd.classroomId ? classroomMap.get(cd.classroomId) : null;
+      row.push(escape(c ? `${c.building} ${c.name}` : ''));
+    }
+    lines.push(row.join(','));
+  }
   return lines.join('\n');
 }
 
 router.get('/closed-dates/export', authMiddleware, roleMiddleware('admin'), (_req: Request, res: Response): void => {
   const db = getDB();
-  const csv = closedDatesToCSV(db.closedDates);
+  const csv = closedDatesToCSV(db.closedDates, db.classrooms);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename=closed-dates-${Date.now()}.csv`);
   res.send('\uFEFF' + csv);
@@ -263,8 +317,12 @@ router.post('/closed-dates/import/preview', authMiddleware, roleMiddleware('admi
     return;
   }
   const db = getDB();
-  const existing = new Set(db.closedDates.map((d) => d.date));
-  const preview = buildPreview(csv, existing);
+  const existingKeys = new Set<string>();
+  for (const d of db.closedDates) {
+    const key = d.classroomId ? `${d.date}|${d.classroomId}` : d.date;
+    existingKeys.add(key);
+  }
+  const preview = buildPreview(csv, existingKeys, db.classrooms);
   logAudit(req.currentUser!.id, req.currentUser!.name, '预览关闭日期导入', undefined, true);
   res.json(preview);
 });
@@ -276,22 +334,32 @@ router.post('/closed-dates/import/execute', authMiddleware, roleMiddleware('admi
     return;
   }
   const db = getDB();
-  const existing = new Set(db.closedDates.map((d) => d.date));
-  const preview = buildPreview(csv, existing);
+  const existingKeys = new Set<string>();
+  for (const d of db.closedDates) {
+    const key = d.classroomId ? `${d.date}|${d.classroomId}` : d.date;
+    existingKeys.add(key);
+  }
+  const preview = buildPreview(csv, existingKeys, db.classrooms);
   const previousClosedDates = JSON.parse(JSON.stringify(db.closedDates)) as ClosedDate[];
   const newItems: ClosedDate[] = [];
   const finalRows: ImportPreviewRow[] = preview.rows.map((r) => {
     if (r.status === 'new') {
-      newItems.push({ date: r.date, reason: r.reason });
-      existing.add(r.date);
-      return { ...r };
-    }
-    if (r.status === 'duplicate' && skipDuplicates) {
+      newItems.push({
+        date: r.date,
+        reason: r.reason,
+        ...(r.classroomId ? { classroomId: r.classroomId } : {}),
+      });
+      const key = r.classroomId ? `${r.date}|${r.classroomId}` : r.date;
+      existingKeys.add(key);
       return { ...r };
     }
     return { ...r };
   });
-  const merged = [...previousClosedDates, ...newItems].sort((a, b) => a.date.localeCompare(b.date));
+  const merged = [...previousClosedDates, ...newItems].sort((a, b) => {
+    const cmp = a.date.localeCompare(b.date);
+    if (cmp !== 0) return cmp;
+    return (a.classroomId || '').localeCompare(b.classroomId || '');
+  });
   db.closedDates = merged;
   const batchId = 'batch-' + generateId();
   const summary = `成功导入 ${newItems.length} 条${preview.duplicateCount > 0 ? `（跳过重复 ${preview.duplicateCount} 条）` : ''}${preview.invalidCount > 0 ? `，无效 ${preview.invalidCount} 条` : ''}`;

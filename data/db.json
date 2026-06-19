@@ -640,6 +640,201 @@
   ],
   "auditLogs": [
     {
+      "id": "mqle918589lv4d",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "撤销关闭日期批量导入，恢复 2 条前的状态",
+      "targetId": "batch-mqle8c67q2gv0m",
+      "success": true,
+      "createdAt": "2026-06-19T20:41:16.661Z"
+    },
+    {
+      "id": "mqle917ovb5ala",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T20:41:16.644Z"
+    },
+    {
+      "id": "mqle8c6lzdysg5",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "导出关闭日期CSV",
+      "success": true,
+      "createdAt": "2026-06-19T20:40:44.205Z"
+    },
+    {
+      "id": "mqle8c690rmup3",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "批量导入关闭日期: 成功导入 2 条，无效 1 条",
+      "targetId": "batch-mqle8c67q2gv0m",
+      "success": true,
+      "createdAt": "2026-06-19T20:40:44.194Z"
+    },
+    {
+      "id": "mqle8c5l8x2x0q",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "预览关闭日期导入",
+      "success": true,
+      "createdAt": "2026-06-19T20:40:44.169Z"
+    },
+    {
+      "id": "mqle8c5gmrt44x",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "预览关闭日期导入",
+      "success": true,
+      "createdAt": "2026-06-19T20:40:44.164Z"
+    },
+    {
+      "id": "mqle8c57y0uxe0",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "尝试执行权限不足的操作: POST /closed-dates/import/preview",
+      "success": false,
+      "reason": "权限不足",
+      "createdAt": "2026-06-19T20:40:44.155Z"
+    },
+    {
+      "id": "mqle8c52olfrlf",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "更新关闭日期",
+      "success": true,
+      "createdAt": "2026-06-19T20:40:44.150Z"
+    },
+    {
+      "id": "mqle8c4vqhvmn6",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T20:40:44.143Z"
+    },
+    {
+      "id": "mqle8c4inm8b1h",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T20:40:44.130Z"
+    },
+    {
+      "id": "mqldwilkyfk0wn",
+      "userId": "unknown",
+      "action": "登录失败",
+      "success": false,
+      "reason": "用户名或密码错误: student1",
+      "createdAt": "2026-06-19T20:31:32.648Z"
+    },
+    {
+      "id": "mqldwikt3erkij",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T20:31:32.621Z"
+    },
+    {
+      "id": "mqldtpk1pmmc02",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "预览关闭日期导入",
+      "success": true,
+      "createdAt": "2026-06-19T20:29:21.697Z"
+    },
+    {
+      "id": "mqldtpjw657lgj",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "预览关闭日期导入",
+      "success": true,
+      "createdAt": "2026-06-19T20:29:21.693Z"
+    },
+    {
+      "id": "mqldtpjtggw4pi",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "预览关闭日期导入",
+      "success": true,
+      "createdAt": "2026-06-19T20:29:21.689Z"
+    },
+    {
+      "id": "mqldtpjotzo601",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "预览关闭日期导入",
+      "success": true,
+      "createdAt": "2026-06-19T20:29:21.684Z"
+    },
+    {
+      "id": "mqldtpjgxik0f2",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "更新关闭日期",
+      "success": true,
+      "createdAt": "2026-06-19T20:29:21.676Z"
+    },
+    {
+      "id": "mqldtpj45wbgj9",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T20:29:21.664Z"
+    },
+    {
+      "id": "mqldls5njsihgp",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "预览关闭日期导入",
+      "success": true,
+      "createdAt": "2026-06-19T20:23:11.819Z"
+    },
+    {
+      "id": "mqldls5ksd1l2s",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "预览关闭日期导入",
+      "success": true,
+      "createdAt": "2026-06-19T20:23:11.816Z"
+    },
+    {
+      "id": "mqldls5gl07dyv",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "预览关闭日期导入",
+      "success": true,
+      "createdAt": "2026-06-19T20:23:11.812Z"
+    },
+    {
+      "id": "mqldls5cof2jut",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "预览关闭日期导入",
+      "success": true,
+      "createdAt": "2026-06-19T20:23:11.808Z"
+    },
+    {
+      "id": "mqldls5187sqwn",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "更新关闭日期",
+      "success": true,
+      "createdAt": "2026-06-19T20:23:11.797Z"
+    },
+    {
+      "id": "mqldls42vl60tp",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T20:23:11.762Z"
+    },
+    {
       "id": "mqlbfi3xdxtnzr",
       "userId": "stu-001",
       "userName": "张三",
@@ -1087,5 +1282,6 @@
   "config": {
     "lateThresholdMinutes": 15,
     "violationWarningThreshold": 3
-  }
+  },
+  "lastClosedDateImport": null
 }
