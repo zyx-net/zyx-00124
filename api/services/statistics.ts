@@ -8,10 +8,8 @@ export function getStudentStats(): StudentStat[] {
 
   for (const student of students) {
     const reservations = db.reservations.filter((r) => r.studentId === student.id);
-    const completedCount = reservations.filter((r) => r.status === 'completed').length;
-    const checkInCount = reservations.filter(
-      (r) => r.status === 'checked_in' || r.status === 'completed',
-    ).length;
+    const checkInCount = reservations.filter((r) => !!r.checkInTime).length;
+    const completedCount = reservations.filter((r) => !!r.checkOutTime || !!r.checkInTime).length;
     const violationCount = db.violations.filter((v) => v.studentId === student.id).length;
 
     result.push({
@@ -35,7 +33,7 @@ export function getClassroomStats(): ClassroomStat[] {
 
   for (const classroom of db.classrooms) {
     const reservations = db.reservations.filter((r) => r.classroomId === classroom.id);
-    const completedCount = reservations.filter((r) => r.status === 'completed').length;
+    const completedCount = reservations.filter((r) => !!r.checkOutTime || !!r.checkInTime).length;
     const totalSeats = classroom.seats.filter((s) => s.enabled).length;
 
     const daysWithSlots = new Set(reservations.map((r) => r.date)).size;

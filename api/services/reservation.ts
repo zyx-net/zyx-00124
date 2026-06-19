@@ -9,8 +9,23 @@ import type {
   ClosedDate,
 } from '../../shared/types.js';
 
+function pad2(n: number): string {
+  return n.toString().padStart(2, '0');
+}
+
+export function todayLocalStr(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function parseDateLocal(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function parseTime(dateStr: string, timeStr: string): Date {
-  return new Date(`${dateStr}T${timeStr}:00`);
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const [hh, mm] = timeStr.split(':').map(Number);
+  return new Date(y, m - 1, d, hh, mm, 0, 0);
 }
 
 export function isClosedDate(date: string): ClosedDate | undefined {
@@ -70,7 +85,7 @@ export function createReservation(
     return { success: false, error: '时段不存在' };
   }
 
-  const dateObj = new Date(date);
+  const dateObj = parseDateLocal(date);
   const weekday = dateObj.getDay() === 0 ? 7 : dateObj.getDay();
   if (!slot.weekday.includes(weekday)) {
     return { success: false, error: '该时段在所选日期不开放' };
@@ -167,7 +182,7 @@ export function checkIn(
   }
 
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  const today = todayLocalStr(now);
   if (reservation.date !== today) {
     return { success: false, error: '非预约当日，无法签到' };
   }

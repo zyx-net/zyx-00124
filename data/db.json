@@ -561,20 +561,6 @@
   "closedDates": [],
   "reservations": [
     {
-      "id": "res-mql977tr9sd5fb",
-      "studentId": "stu-001",
-      "classroomId": "cls-mql95z3b61341u",
-      "seatId": "cls-mql95z3b61341u-seat-1-2",
-      "date": "2026-06-20",
-      "slotId": "slot-mql95z3gygjygj",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "status": "approved",
-      "createdAt": "2026-06-19T18:19:53.823Z",
-      "approvedBy": "admin-001",
-      "approvedAt": "2026-06-19T18:19:53.828Z"
-    },
-    {
       "id": "res-mql95z4adp2c3h",
       "studentId": "stu-002",
       "classroomId": "cls-mql95z3b61341u",
@@ -615,6 +601,23 @@
       "createdAt": "2026-06-19T17:40:26.487Z",
       "approvedBy": "admin-001",
       "approvedAt": "2026-06-19T17:51:55.406Z"
+    },
+    {
+      "id": "res-e2e-1781894640613",
+      "studentId": "stu-001",
+      "classroomId": "cls-a101",
+      "seatId": "cls-a101-seat-A-1",
+      "seatLabel": "A1",
+      "classroomName": "A101",
+      "building": "A栋教学楼",
+      "date": "2026-06-20",
+      "timeSlotId": "slot-1",
+      "startTime": "08:00",
+      "endTime": "10:00",
+      "status": "completed",
+      "createdAt": "2026-06-19T18:44:00.613Z",
+      "isLate": true,
+      "notCheckedOut": true
     }
   ],
   "violations": [
@@ -625,9 +628,145 @@
       "type": "no_show",
       "description": "预约未签到",
       "createdAt": "2026-06-19T18:18:55.888Z"
+    },
+    {
+      "id": "v-e2e-1781894640637",
+      "studentId": "stu-001",
+      "reservationId": "res-e2e-1781894640613",
+      "type": "no_show",
+      "date": "2026-06-20",
+      "createdAt": "2026-06-19T18:44:00.637Z"
     }
   ],
   "auditLogs": [
+    {
+      "id": "mqla63hpn8otpn",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:47:01.165Z"
+    },
+    {
+      "id": "mqla286xebehqt",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "签到失败",
+      "targetId": "res-e2e-1781894640613",
+      "success": false,
+      "reason": "尚未到签到时间",
+      "createdAt": "2026-06-19T18:44:00.633Z"
+    },
+    {
+      "id": "mqla286mezmgp2",
+      "userId": "stu-002",
+      "userName": "李四",
+      "action": "签到失败",
+      "targetId": "res-e2e-1781894640613",
+      "success": false,
+      "reason": "不能替他人签到",
+      "createdAt": "2026-06-19T18:44:00.622Z"
+    },
+    {
+      "id": "mql9xhtlncpmc6",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "签到失败",
+      "targetId": "res-e2e-1781894419801",
+      "success": false,
+      "reason": "尚未到签到时间",
+      "createdAt": "2026-06-19T18:40:19.833Z"
+    },
+    {
+      "id": "mql9xhtc2uj0hl",
+      "userId": "stu-002",
+      "userName": "李四",
+      "action": "签到失败",
+      "targetId": "res-e2e-1781894419801",
+      "success": false,
+      "reason": "不能替他人签到",
+      "createdAt": "2026-06-19T18:40:19.824Z"
+    },
+    {
+      "id": "mql9xhpkjb8nzf",
+      "userId": "stu-002",
+      "userName": "李四",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:40:19.688Z"
+    },
+    {
+      "id": "mql9xhpgnytgvo",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:40:19.684Z"
+    },
+    {
+      "id": "mql9xhp9yelmsp",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:40:19.677Z"
+    },
+    {
+      "id": "mql9wcem0d2h0m",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:39:26.158Z"
+    },
+    {
+      "id": "mql9vxjhnoip32",
+      "userId": "stu-002",
+      "userName": "李四",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:39:06.893Z"
+    },
+    {
+      "id": "mql9vxjcwst1e2",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:39:06.888Z"
+    },
+    {
+      "id": "mql9vxj4a81o1u",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:39:06.880Z"
+    },
+    {
+      "id": "mql9uju5umcqq6",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:38:02.477Z"
+    },
+    {
+      "id": "mql9u0o4mezu9p",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:37:37.636Z"
+    },
+    {
+      "id": "mql9sifhrb103h",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T18:36:27.341Z"
+    },
     {
       "id": "mql9a17n2dpilc",
       "userId": "admin-001",
