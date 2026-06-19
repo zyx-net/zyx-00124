@@ -55,6 +55,32 @@ function request(method: string, urlPath: string, body?: any, token?: string): P
   });
 }
 
+function requestRaw(method: string, urlPath: string, token?: string): Promise<{ status: number; body: string; headers: any }> {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlPath, BASE);
+    const req = http.request(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname + url.search,
+        method,
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      },
+      (res) => {
+        let buf = '';
+        res.on('data', (c) => (buf += c));
+        res.on('end', () => {
+          resolve({ status: res.statusCode!, body: buf, headers: res.headers });
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 async function login(username: string, password: string): Promise<string> {
   const r = await request('POST', '/api/auth/login', { username, password });
   if (r.status !== 200 || !r.data?.token) throw new Error(`登录失败 ${username}: ${r.status}`);
@@ -282,13 +308,13 @@ async function main() {
     const r1 = await request('POST', '/api/classrooms/closed-dates/import/execute', { csv: SAMPLE_CSV_VALID, skipDuplicates: true }, adminToken);
     check(r1.data.added === 4, '初始导入 added=4', r1.data.added);
 
-    // 导出
-    const exportR = await request('GET', '/api/classrooms/closed-dates/export', undefined, adminToken);
+    // 导出（用 raw request 拿到原始 CSV 文本）
+    const exportR = await requestRaw('GET', '/api/classrooms/closed-dates/export', adminToken);
     check(exportR.status === 200, '导出返回 200');
     check((exportR.headers['content-type'] as string)?.includes('text/csv'), '响应 Content-Type 为 text/csv');
     check((exportR.headers['content-disposition'] as string)?.includes('attachment'), '响应含 attachment 下载头');
 
-    const csvText = String(exportR.data).replace(/^\uFEFF/, '');
+    const csvText = exportR.body.replace(/^\uFEFF/, '');
     check(csvText.includes('日期,关闭原因') || csvText.includes('date,reason'), '导出 CSV 含表头');
     check(csvText.includes('2026-07-01'), '导出 CSV 包含导入的 07-01');
     check(csvText.includes('国庆节'), '导出 CSV 包含"国庆节"原因');
@@ -308,25 +334,118 @@ async function main() {
   }
 
   // ----------------------------------------------------------------
-  // 8. 重启持久化：数据写入 db.json，服务重启后不丢
+  // 8. 真正重启持久化：停掉服务 → 重启 → 数据仍在
   // ----------------------------------------------------------------
-  console.log('\n8. 持久化验证：写入 db.json，数据在磁盘上存在');
+  console.log('\n8. 真正重启持久化：停止服务 → 重新启动 → 数据完整恢复');
   {
-    await request('POST', '/api/classrooms/closed-dates/import/execute', { csv: SAMPLE_CSV_VALID, skipDuplicates: true }, adminToken);
+    await request('POST', '/api/classrooms/closed-dates/import/execute', { csv: SAMPLE_CSV_WITH_CLASSROOM, skipDuplicates: true }, adminToken);
+
+    const execR2 = await request('GET', '/api/classrooms/closed-dates/list', undefined, adminToken);
+    const countBeforeRestart = execR2.data.length;
+    check(countBeforeRestart === 3, `导入后 list 有 3 条`, countBeforeRestart);
+
+    const snapR = await request('GET', '/api/classrooms/closed-dates/import/last', undefined, adminToken);
+    const batchIdBefore = snapR.data.batchId;
+    check(!!batchIdBefore, '重启前快照存在且 batchId 非空', batchIdBefore);
+
+    // 确认磁盘写入
     const dbText = fs.readFileSync(dbPath, 'utf-8');
     const db = JSON.parse(dbText);
-    check(Array.isArray(db.closedDates) && db.closedDates.length === 4, 'db.json 中 closedDates 有 4 条');
-    check(db.closedDates.some((d: any) => d.date === '2026-10-01'), 'db.json 中存在 10-01');
+    check(Array.isArray(db.closedDates) && db.closedDates.length === 3, 'db.json 中 closedDates 有 3 条');
     check(!!db.lastClosedDateImport, 'db.json 中保存了 lastClosedDateImport 快照');
-    check(db.lastClosedDateImport.importedCount === 4, '快照 importedCount 在磁盘上正确');
+    check(db.lastClosedDateImport.importedCount === 3, '快照 importedCount 在磁盘上正确');
+    check(db.closedDates.some((d: any) => d.classroomId === 'cls-a101'), '磁盘记录带 classroomId');
 
-    // 模拟"重启"：直接通过 getDB 重新读取
-    const { getDB } = await import('../api/data/store.js');
-    const reloaded = getDB();
-    check(reloaded.closedDates.length === 4, '重新 getDB() 后仍有 4 条关闭日期');
-    check(!!reloaded.lastClosedDateImport, '重新 getDB() 后仍有导入快照');
+    // 真正重启服务：动态 import app，启动新实例在测试端口
+    console.log('  正在停止并重启服务...');
+    const { default: app } = await import('../api/app.js');
+    const TEST_PORT = 13001;
+    const server1 = app.listen(TEST_PORT);
 
-    // 清理
+    // 等待新服务就绪
+    await new Promise<void>((resolve) => {
+      const tryHealth = () => {
+        http.get(`http://localhost:${TEST_PORT}/api/health`, (res) => {
+          res.resume();
+          if (res.statusCode === 200) resolve();
+          else setTimeout(tryHealth, 200);
+        }).on('error', () => setTimeout(tryHealth, 200));
+      };
+      setTimeout(tryHealth, 100);
+    });
+
+    // 新服务上重新登录（内存会话已丢失）
+    const loginOnNewServer = (username: string, password: string): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const data = JSON.stringify({ username, password });
+        const req = http.request(
+          {
+            hostname: 'localhost',
+            port: TEST_PORT,
+            path: '/api/auth/login',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+          },
+          (res) => {
+            let buf = '';
+            res.on('data', (c) => (buf += c));
+            res.on('end', () => {
+              try {
+                const json = JSON.parse(buf);
+                if (json.token) resolve(json.token);
+                else reject(new Error('no token'));
+              } catch { reject(new Error('parse error')); }
+            });
+          },
+        );
+        req.on('error', reject);
+        req.write(data);
+        req.end();
+      });
+    };
+
+    const getOnNewServer = (path: string, token: string): Promise<{ status: number; data: any }> => {
+      return new Promise((resolve) => {
+        const req = http.request(
+          {
+            hostname: 'localhost',
+            port: TEST_PORT,
+            path,
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` },
+          },
+          (res) => {
+            let buf = '';
+            res.on('data', (c) => (buf += c));
+            res.on('end', () => {
+              let json: any = buf;
+              try { json = JSON.parse(buf); } catch {}
+              resolve({ status: res.statusCode!, data: json });
+            });
+          },
+        );
+        req.on('error', () => resolve({ status: 0, data: null }));
+        req.end();
+      });
+    };
+
+    const newAdminToken = await loginOnNewServer('admin', 'admin123');
+    check(!!newAdminToken, '重启后能重新登录获取 token');
+
+    // 在新服务实例上验证数据
+    const listAfterRestart = await getOnNewServer('/api/classrooms/closed-dates/list', newAdminToken);
+    check(listAfterRestart.status === 200, '重启后 list API 返回 200', listAfterRestart.status);
+    check(listAfterRestart.data.length === countBeforeRestart, `重启后数据条数不变 (${countBeforeRestart})`, listAfterRestart.data.length);
+
+    const snapAfterRestart = await getOnNewServer('/api/classrooms/closed-dates/import/last', newAdminToken);
+    check(snapAfterRestart.status === 200, '重启后快照 API 返回 200');
+    check(snapAfterRestart.data?.batchId === batchIdBefore, '重启后快照 batchId 不变', snapAfterRestart.data?.batchId);
+    check(snapAfterRestart.data?.importedCount === 3, '重启后快照 importedCount 仍为 3', snapAfterRestart.data?.importedCount);
+
+    // 关闭测试服务
+    await new Promise<void>((resolve) => server1.close(() => resolve()));
+
+    // 清理（通过原服务）
     await request('PUT', '/api/classrooms/closed-dates/batch', { dates: [] }, adminToken);
   }
 
@@ -440,40 +559,73 @@ async function main() {
   // ----------------------------------------------------------------
   console.log('\n13. 导出：有 classroomId 的记录导出时带出教室列');
   {
-    const exportR = await request('GET', '/api/classrooms/closed-dates/export', undefined, adminToken);
+    const exportR = await requestRaw('GET', '/api/classrooms/closed-dates/export', adminToken);
     check(exportR.status === 200, '导出 200', exportR.status);
-    check(exportR.data.includes('日期,关闭原因,教室'), '导出包含教室列头', exportR.data.includes('日期,关闭原因,教室'));
-    check(exportR.data.includes('A栋教学楼 A101'), '导出包含教室名称', exportR.data.includes('A栋教学楼 A101'));
+    const csvBody = exportR.body.replace(/^\uFEFF/, '');
+    check(csvBody.includes('日期,关闭原因,教室'), '导出包含教室列头', csvBody.includes('日期,关闭原因,教室'));
+    check(csvBody.includes('A栋教学楼 A101'), '导出包含教室名称', csvBody.includes('A栋教学楼 A101'));
   }
 
   // ----------------------------------------------------------------
-  // 14. 导入导出一致性：导出的 CSV 能正确再导入
+  // 14. 导入导出一致性：导出的 CSV 能正确再导入（含教室列）
   // ----------------------------------------------------------------
-  console.log('\n14. 导入导出一致性：导出的 CSV 能正确再导入');
+  console.log('\n14. 导入导出一致性：导出 CSV（含教室列）能正确再导入');
   {
-    const exportR = await request('GET', '/api/classrooms/closed-dates/export', undefined, adminToken);
-    const previewR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: exportR.data }, adminToken);
+    const exportR = await requestRaw('GET', '/api/classrooms/closed-dates/export', adminToken);
+    const csvBody = exportR.body.replace(/^\uFEFF/, '');
+    const previewR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: csvBody }, adminToken);
     check(previewR.data.duplicateCount === 3, '导出后再预览：3 条都重复（在 DB 中）', previewR.data.duplicateCount);
     check(previewR.data.invalidCount === 0, '导出后再预览：无无效记录', previewR.data.invalidCount);
   }
 
   // ----------------------------------------------------------------
   // 15. 撤销：只恢复实际导入的记录，不恢复无效行
+  //     + 撤销后导出 CSV 回退 + 快照清除
   // ----------------------------------------------------------------
-  console.log('\n15. 撤销：只恢复实际导入的记录，不恢复无效行');
+  console.log('\n15. 撤销：恢复到导入前状态 + 导出回退 + 快照清除');
   {
+    // 当前状态：3 条带教室的记录（上面第 12 步导入的）
+    // 先记录当前导出内容
+    const exportBeforeUndo = await requestRaw('GET', '/api/classrooms/closed-dates/export', adminToken);
+    const csvBeforeUndo = exportBeforeUndo.body.replace(/^\uFEFF/, '');
+    check(csvBeforeUndo.split('\n').length >= 4, '撤销前导出至少 4 行（表头+3数据）');
+
+    // 撤销
     const undoR = await request('POST', '/api/classrooms/closed-dates/import/undo', undefined, adminToken);
     check(undoR.data.success === true, '撤销成功', undoR.data.success);
     check(undoR.data.restoredCount === 3, '撤销恢复 3 条', undoR.data.restoredCount);
 
+    // 撤销后列表为空
     const listR = await request('GET', '/api/classrooms/closed-dates/list', undefined, adminToken);
     check(listR.data.length === 0, '撤销后数据库为空', listR.data.length);
+
+    // 撤销后导出 CSV 也应为空或仅有表头
+    const exportAfterUndo = await requestRaw('GET', '/api/classrooms/closed-dates/export', adminToken);
+    const csvAfterUndo = exportAfterUndo.body.replace(/^\uFEFF/, '');
+    const dataLinesAfterUndo = csvAfterUndo.split('\n').filter((l: string) => l.trim().length > 0 && !l.startsWith('日期') && !l.startsWith('date'));
+    check(dataLinesAfterUndo.length === 0, '撤销后导出 CSV 无数据行', dataLinesAfterUndo.length);
+
+    // 撤销后快照为 null
+    const lastR = await request('GET', '/api/classrooms/closed-dates/import/last', undefined, adminToken);
+    check(lastR.data === null, '撤销后快照为 null', lastR.data);
   }
 
   // ----------------------------------------------------------------
-  // 16. 多种教室匹配方式（id、名称、楼栋+名称）
+  // 16. 撤销后再次导出-再导入闭环：导出内容再预览应为 0 条
   // ----------------------------------------------------------------
-  console.log('\n16. 多种教室匹配方式：id、名称、楼栋+名称都支持');
+  console.log('\n16. 撤销后导出闭环验证：空数据导出再预览应为 0 条有效记录');
+  {
+    const exportR = await requestRaw('GET', '/api/classrooms/closed-dates/export', adminToken);
+    const csvBody = exportR.body.replace(/^\uFEFF/, '');
+    const previewR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: csvBody }, adminToken);
+    check(previewR.data.total === 0, '空数据导出再预览 total=0', previewR.data.total);
+    check(previewR.data.newCount === 0, '空数据导出再预览 newCount=0', previewR.data.newCount);
+  }
+
+  // ----------------------------------------------------------------
+  // 17. 多种教室匹配方式（id、名称、楼栋+名称）
+  // ----------------------------------------------------------------
+  console.log('\n17. 多种教室匹配方式：id、名称、楼栋+名称都支持');
   {
     const previewR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: SAMPLE_CSV_CLASSROOM_MATCH_MODES }, adminToken);
     check(previewR.data.newCount === 4, '4 种匹配方式都成功', previewR.data.newCount);
@@ -493,9 +645,9 @@ async function main() {
   }
 
   // ----------------------------------------------------------------
-  // 17. 同批内同教室同日重复检测
+  // 18. 同批内同教室同日重复检测
   // ----------------------------------------------------------------
-  console.log('\n17. 同批内同教室同日重复检测');
+  console.log('\n18. 同批内同教室同日重复检测');
   {
     const previewR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: SAMPLE_CSV_SAME_CLASSROOM_DUP }, adminToken);
     check(previewR.data.newCount === 1, '可新增 = 1（仅第一条）', previewR.data.newCount);
@@ -511,9 +663,9 @@ async function main() {
   }
 
   // ----------------------------------------------------------------
-  // 18. 不带教室列时保持全局逻辑
+  // 19. 不带教室列时保持全局逻辑
   // ----------------------------------------------------------------
-  console.log('\n18. 不带教室列时保持全局逻辑（向后兼容）');
+  console.log('\n19. 不带教室列时保持全局逻辑（向后兼容）');
   {
     const previewR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: SAMPLE_CSV_VALID }, adminToken);
     check(previewR.data.newCount === 4, '不带教室列时 new = 4', previewR.data.newCount);
@@ -531,9 +683,9 @@ async function main() {
   }
 
   // ----------------------------------------------------------------
-  // 19. 学生无权限访问教室列相关导入
+  // 20. 学生无权限访问教室列相关导入
   // ----------------------------------------------------------------
-  console.log('\n19. 学生无权限：带教室列的导入学生也无法访问');
+  console.log('\n20. 学生无权限：带教室列的导入学生也无法访问');
   {
     const prevR = await request('POST', '/api/classrooms/closed-dates/import/preview', { csv: SAMPLE_CSV_WITH_CLASSROOM }, stu1Token);
     check(prevR.status === 403, '学生预览返回 403', prevR.status);

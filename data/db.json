@@ -510,6 +510,81 @@
   "violations": [],
   "auditLogs": [
     {
+      "id": "mqlhg8twr9uhcl",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "尝试执行权限不足的操作: GET /closed-dates/import/last",
+      "success": false,
+      "reason": "权限不足",
+      "createdAt": "2026-06-19T22:10:51.956Z"
+    },
+    {
+      "id": "mqlhg8to750kyc",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T22:10:51.948Z"
+    },
+    {
+      "id": "mqlhg8eod7gfi1",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T22:10:51.408Z"
+    },
+    {
+      "id": "mqlhfxrxdlq9h3",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "撤销关闭日期批量导入，恢复 1 条前的状态",
+      "targetId": "batch-mqlhfxr322tqrz",
+      "success": true,
+      "createdAt": "2026-06-19T22:10:37.629Z"
+    },
+    {
+      "id": "mqlhfxrccigej8",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "导出关闭日期CSV",
+      "success": true,
+      "createdAt": "2026-06-19T22:10:37.608Z"
+    },
+    {
+      "id": "mqlhfxr35bav5r",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "批量导入关闭日期: 成功导入 1 条（跳过重复 1 条），无效 1 条",
+      "targetId": "batch-mqlhfxr322tqrz",
+      "success": true,
+      "createdAt": "2026-06-19T22:10:37.599Z"
+    },
+    {
+      "id": "mqlhfxr0k81vry",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "预览关闭日期导入",
+      "success": true,
+      "createdAt": "2026-06-19T22:10:37.596Z"
+    },
+    {
+      "id": "mqlhfxqvigyttl",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "更新关闭日期",
+      "success": true,
+      "createdAt": "2026-06-19T22:10:37.591Z"
+    },
+    {
+      "id": "mqlhfxqjrjcxeg",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-19T22:10:37.579Z"
+    },
+    {
       "id": "mqlf0xkgb76stu",
       "userId": "admin-001",
       "userName": "系统管理员",

@@ -561,27 +561,36 @@ date,reason
 - `closedDates` 数组（关闭日期主表）
 - `lastClosedDateImport` 对象（最近导入快照，含完整 `previousClosedDates`）
 
-**重启验证路径**：
-```bash
+**重启验证路径**（真实停起服务，非仅重读磁盘文件）：
+```powershell
 # 1. 执行导入
 POST /import/execute → 得到 batchId ABC
 
-# 2. 检查磁盘
-cat data/db.json | jq '.lastClosedDateImport.batchId'  # 应为 "ABC"
-cat data/db.json | jq '.closedDates | length'            # 应为 导入后总数
+# 2. 确认磁盘写入
+Get-Content data/db.json | ConvertFrom-Json | Select -Expand lastClosedDateImport | Select batchId
+# 应输出 ABC
 
-# 3. 关闭服务（Ctrl+C）
-# 4. 重新启动 npm run dev
+# 3. 真正关闭后端服务
+#    方式 A：在运行 npm run dev 的终端按 Ctrl+C
+#    方式 B：PowerShell 查找并终止进程
+$pid = (Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue).OwningProcess
+Stop-Process -Id $pid -Force
 
-# 5. 启动后查询快照
-GET /import/last → 应返回完整 snapshot 对象（含 ABC）
-GET /closed-dates/list → 总数与重启前一致
+# 4. 重新启动后端
+npm run server:dev   # 或 npm run dev
+
+# 5. 等服务就绪后查询快照（需重新登录，因为内存会话已丢失）
+POST /api/auth/login → 获取新 token
+GET  /import/last → 应返回完整 snapshot 对象（含 ABC）
+GET  /closed-dates/list → 总数与重启前一致
 
 # 6. 此时依然可以撤销
 POST /import/undo → 仍能恢复到 ABC 导入之前的状态
+GET  /export → 导出内容与撤销前基线一致
+GET  /import/last → 返回 null（快照已清除）
 ```
 
-**结论**：快照 100% 持久化，服务重启不丢失，撤销能力跨重启有效。
+**结论**：快照 100% 持久化到 `data/db.json`，服务真正重启后数据完整恢复，撤销能力跨重启有效。
 
 ---
 
@@ -617,151 +626,46 @@ POST /import/undo → 仍能恢复到 ABC 导入之前的状态
 4. 点击「确认导入」→ Toast 显示汇总信息，关闭日期列表新增 3 条，顶部出现「撤销上次导入 (3 条)」按钮
 5. 点击「导出 CSV」→ 下载 `closed-dates-xxx.csv`，打开检查三列齐全、中文字段正确
 6. 用导出的文件再次执行「预览导入」→ 3 条有效记录全部显示为重复（`duplicateCount = 3`），说明导出-导入闭环一致
-7. **模拟服务重启**：停止后端进程再启动 → 重新进入页面 → 「撤销上次导入」按钮仍在 → 点击「撤销」→ 3 条记录消失，按钮隐藏
-8. **审计日志验证**：进入「历史记录」→ 操作日志 → 可看到「预览、批量导入、导出 CSV、撤销」共 4 条记录，以及 student01 越权尝试时的「权限不足」记录
-9. **student01 登录验证**：直接用 curl/接口访问上述 5 个批量接口 → 全部返回 403「权限不足」
+7. **真实服务重启验证**：停止后端进程（Ctrl+C 或 `Stop-Process`），再 `npm run server:dev` 重启 → 用新 token 重新登录 →「撤销上次导入」按钮仍在 → 快照与数据完整 → 点击「撤销」→ 3 条记录消失，按钮隐藏
+8. **撤销后导出和快照回退**：撤销后导出 CSV，内容应只含导入前的基线数据；`GET /import/last` 应返回 null
+9. **审计日志验证**：进入「历史记录」→ 操作日志 → 可看到「预览、批量导入、导出 CSV、撤销」共 4 条记录，以及 student01 越权尝试时的「权限不足」记录
+10. **student01 登录验证**：直接用 curl/接口访问上述 5 个批量接口 → 全部返回 403「权限不足」
 
 ---
 
-### 可复现验证脚本（curl 一键跑通）
+### 可复现验证脚本（一键跑通）
 
-将以下脚本保存为 `test-batch-import.ps1`（Windows PowerShell）或转为 bash，需先启动后端 `npm run dev`（端口 3001）。脚本自动备份 `data/db.json`，测试完成后恢复。
+项目已包含完整的 PowerShell 验证脚本 `test-batch-import.ps1`，覆盖以下闭环：
 
-```powershell
-# === 可复现验证：教室停课日批量导入完整链路 ===
-$BASE = "http://localhost:3001"
-$DB = "d:\workSpace\AI__SPACE\zyx-00124\data\db.json"
-$DB_BAK = "$DB.bak"
-Copy-Item $DB $DB_BAK -Force
+| 步骤 | 验证内容 | 关键断言 |
+|------|---------|---------|
+| Step 0 | 登录 admin + student01 | 两个 token 均获取成功 |
+| Step 1 | 学生权限：5 个批量接口全部 403 | 每个接口返回 403 |
+| Step 2 | 初始化：清空关闭日期 | PUT 成功 |
+| Step 3 | 预览导入（含教室列 CSV） | total=6, new=3, invalid=3 |
+| Step 4 | 执行导入 | added=3, failed=3, batchId 非空 |
+| Step 5 | 查询最近导入快照 | importedCount=3, batchId 匹配 |
+| Step 6 | list API 与磁盘 db.json 一致 | API 条数 = 磁盘条数 |
+| Step 7 | 导出 CSV + 往返一致性 | 导出列数≥3, 再预览无 invalid |
+| **Step 8** | **真正服务重启** | 停止进程→重启→重登录→数据/快照完整→撤销仍可执行 |
+| Step 9 | 撤销→导出回退+快照清除 | 撤销后 list=1(基线), 导出仅基线, 快照=null |
+| Step 10 | 二次撤销失败 | 返回 400 |
+| Step 11 | 审计日志 + 学生越权记录 | preview/import/export/undo 均有日志, 学生≥5条失败记录 |
 
-function Send-Json($method, $path, $body, $token) {
-    $headers = @{ "Content-Type" = "application/json" }
-    if ($token) { $headers["Authorization"] = "Bearer $token" }
-    $params = @{ Method=$method; Uri="$BASE$path"; Headers=$headers }
-    if ($body) { $params["Body"] = ($body | ConvertTo-Json -Compress) }
-    try { return Invoke-RestMethod @params } catch { return $_.Exception.Response }
-}
-
-function Login($u, $p) {
-    $r = Send-Json POST "/api/auth/login" @{username=$u; password=$p}
-    return $r.token
-}
-
-Write-Host "=== Step 0: 登录 ===" -ForegroundColor Cyan
-$admin = Login "admin" "admin123"
-$stu   = Login "student01" "123456"
-Write-Host "admin token: $($admin.Substring(0,10))..."
-Write-Host "student token: $($stu.Substring(0,10))..."
-
-$CSV_WITH_CLASSROOM = @"
-日期,关闭原因,教室
-2026-07-01,建党节活动关闭,cls-a101
-2026-08-01,建军节训练,Z999
-2026-09-10,教师节活动,B202
-2026-10-01,国庆维修,NOT-EXIST
-2026-11-11,双11活动,
-2026-12-25,圣诞活动,cls-a101
-"@
-
-Write-Host "`n=== Step 1: 权限验证 - 学生访问所有批量接口 ===" -ForegroundColor Cyan
-foreach ($path in @(
-    @("GET","/api/classrooms/closed-dates/export",$null),
-    @("POST","/api/classrooms/closed-dates/import/preview",@{csv=$CSV_WITH_CLASSROOM}),
-    @("POST","/api/classrooms/closed-dates/import/execute",@{csv=$CSV_WITH_CLASSROOM}),
-    @("POST","/api/classrooms/closed-dates/import/undo",$null),
-    @("GET","/api/classrooms/closed-dates/import/last",$null)
-)) {
-    $m, $p, $b = $path
-    try {
-        $resp = Send-Json $m $p $b $stu
-        Write-Host "$m $p -> 期望 403，实际: $resp"
-    } catch {
-        $status = [int]$_.Exception.Response.StatusCode
-        Write-Host "$m $p -> HTTP $status $(if($status -eq 403){'✅ PASS'}else{'❌ FAIL'})"
-    }
-}
-
-Write-Host "`n=== Step 2: 预览导入（admin） ===" -ForegroundColor Cyan
-$preview = Send-Json POST "/api/classrooms/closed-dates/import/preview" @{csv=$CSV_WITH_CLASSROOM} $admin
-Write-Host "total=$($preview.total) new=$($preview.newCount) dup=$($preview.duplicateCount) invalid=$($preview.invalidCount)"
-$preview.rows | ForEach-Object { Write-Host "  行$($_.line): $($_.status) $($_.date) $($_.classroomName) - $($_.message)" }
-Write-Host "  断言: total=6, newCount=3, invalidCount=3 $(if($preview.total -eq 6 -and $preview.newCount -eq 3 -and $preview.invalidCount -eq 3){'✅ PASS'}else{'❌ FAIL'})"
-
-Write-Host "`n=== Step 3: 执行导入（admin） ===" -ForegroundColor Cyan
-$exec = Send-Json POST "/api/classrooms/closed-dates/import/execute" @{csv=$CSV_WITH_CLASSROOM; skipDuplicates=$true} $admin
-Write-Host "added=$($exec.added) skipped=$($exec.skipped) failed=$($exec.failed) batchId=$($exec.batchId)"
-Write-Host "  summary: $($exec.summary)"
-Write-Host "  断言: added=3, failed=3 $(if($exec.added -eq 3 -and $exec.failed -eq 3){'✅ PASS'}else{'❌ FAIL'})"
-
-Write-Host "`n=== Step 4: 查询最近导入快照（admin） ===" -ForegroundColor Cyan
-$last = Send-Json GET "/api/classrooms/closed-dates/import/last" $null $admin
-Write-Host "snap batchId=$($last.batchId) importedCount=$($last.importedCount) importedBy=$($last.importedByName)"
-Write-Host "previousClosedDates 基线条数: $($last.previousClosedDates.Count)"
-Write-Host "  断言: importedCount=3, previousClosedDates=0 $(if($last.importedCount -eq 3 -and $last.previousClosedDates.Count -eq 0){'✅ PASS'}else{'❌ FAIL'})"
-
-Write-Host "`n=== Step 5: 导出 CSV 并对账 ===" -ForegroundColor Cyan
-$headers2 = @{ Authorization = "Bearer $admin" }
-$exportResp = Invoke-WebRequest -Uri "$BASE/api/classrooms/closed-dates/export" -Headers $headers2
-$exportCsv = $exportResp.Content
-Write-Host "Content-Type: $($exportResp.Headers['Content-Type'])"
-Write-Host "CSV 片段: $($exportCsv.Substring(0, [Math]::Min(200, $exportCsv.Length)))"
-# 再导入一次校验: 应该全部 duplicate
-$rePreview = Send-Json POST "/api/classrooms/closed-dates/import/preview" @{csv=$exportCsv} $admin
-Write-Host "  导出内容再预览: duplicateCount=$($rePreview.duplicateCount) invalidCount=$($rePreview.invalidCount)"
-Write-Host "  断言: duplicateCount=3, invalidCount=0 $(if($rePreview.duplicateCount -eq 3 -and $rePreview.invalidCount -eq 0){'✅ PASS'}else{'❌ FAIL'})"
-
-Write-Host "`n=== Step 6: 模拟服务重启（重新读取 db.json） ===" -ForegroundColor Cyan
-# 直接删除 db.json 会被重建，这里用更精确的验证：检查磁盘文件内容
-$dbOnDisk = Get-Content $DB | ConvertFrom-Json
-Write-Host "磁盘 closedDates.Count=$($dbOnDisk.closedDates.Count)  snap存在=$( $null -ne $dbOnDisk.lastClosedDateImport )"
-# 模拟重启: 再次 GET /list 和 /last 依然一致
-$listAfter = Send-Json GET "/api/classrooms/closed-dates/list" $null $admin
-Write-Host "API list 条数=$($listAfter.Count)"
-Write-Host "  断言: 磁盘=3, API=3 $(if($dbOnDisk.closedDates.Count -eq 3 -and $listAfter.Count -eq 3){'✅ PASS'}else{'❌ FAIL'})"
-
-Write-Host "`n=== Step 7: 撤销导入 ===" -ForegroundColor Cyan
-$undo = Send-Json POST "/api/classrooms/closed-dates/import/undo" $null $admin
-Write-Host "restoredCount=$($undo.restoredCount) batchId=$($undo.batchId) summary=$($undo.summary)"
-$listUndo = Send-Json GET "/api/classrooms/closed-dates/list" $null $admin
-$lastUndo = Send-Json GET "/api/classrooms/closed-dates/import/last" $null $admin
-Write-Host "  撤销后 list 条数=$($listUndo.Count) 快照=$(if($lastUndo -eq $null){'null ✅ PASS'}else{'存在 ❌ FAIL'})"
-Write-Host "  断言: restoredCount=3, list=0 $(if($undo.restoredCount -eq 3 -and $listUndo.Count -eq 0){'✅ PASS'}else{'❌ FAIL'})"
-
-Write-Host "`n=== Step 8: 再次撤销应失败 ===" -ForegroundColor Cyan
-try {
-    Send-Json POST "/api/classrooms/closed-dates/import/undo" $null $admin | Out-Null
-    Write-Host "  ❌ FAIL: 预期 HTTP 400"
-} catch {
-    $status = [int]$_.Exception.Response.StatusCode
-    Write-Host "  HTTP $status $(if($status -eq 400){'✅ PASS (无快照撤销返回 400)'}else{'❌ FAIL'})"
-}
-
-Write-Host "`n=== Step 9: 审计日志检查 ===" -ForegroundColor Cyan
-$logs = Send-Json GET "/api/audit-logs" $null $admin
-$actions = $logs | ForEach-Object { $_.action }
-function Check-Log($kw) {
-    $found = $actions | Where-Object { $_ -match [regex]::Escape($kw) }
-    Write-Host "  含[$kw] 的日志: $(if($found){'✅ PASS'}else{'❌ FAIL'})"
-}
-Check-Log "预览关闭日期导入"
-Check-Log "批量导入关闭日期"
-Check-Log "导出关闭日期CSV"
-Check-Log "撤销关闭日期批量导入"
-
-# 恢复原始数据
-Copy-Item $DB_BAK $DB -Force
-Remove-Item $DB_BAK -Force
-Write-Host "`n=== 验证完成，原始 db.json 已恢复 ===" -ForegroundColor Green
-```
-
-运行方式（PowerShell）：
+运行方式（需先启动后端 `npm run dev`，端口 3001）：
 ```powershell
 cd d:\workSpace\AI__SPACE\zyx-00124
 powershell -ExecutionPolicy Bypass -File test-batch-import.ps1
 ```
 
-或运行项目已有的回归测试（更全量，含 19 个子场景）：
+脚本会自动备份 `data/db.json`，测试完成后恢复。
+
+也可运行 TypeScript 回归测试（20 个子场景，含真正重启）：
 ```bash
-node --experimental-vm-modules test/closed-dates-import-regression.test.js
+npx tsx test/closed-dates-import-regression.test.ts
 ```
-该脚本覆盖：权限、表头中英文、教室 4 种匹配方式、同批内重复检测、持久化、撤销原子性、导入导出闭环等全部断言。
+或通过 npm script 运行：
+```bash
+npm run test:closed-dates
+```
+该脚本覆盖：权限、表头中英文、教室 4 种匹配方式、同批内重复检测、真正重启后持久化、撤销原子性、导入导出闭环、撤销后导出与快照回退等全部断言。
