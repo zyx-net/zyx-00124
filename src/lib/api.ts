@@ -198,4 +198,36 @@ export const api = {
   listAuditLogs: () => request<import('../../shared/types').AuditLog[]>('/api/audit-logs'),
   listUsers: () => request<Omit<import('../../shared/types').User, 'password'>[]>('/api/users'),
   getConfig: () => request<import('../../shared/types').SystemConfig>('/api/config'),
+
+  listSuspensionPlans: (status?: string) =>
+    request<any[]>(`/api/suspensions${status ? `?status=${status}` : ''}`),
+  getSuspensionPlan: (id: string) =>
+    request<any>(`/api/suspensions/${id}`),
+  createSuspensionPlan: (data: {
+    classroomId: string;
+    reason: import('../../shared/types').SuspensionReason;
+    reasonText: string;
+    recurrence: import('../../shared/types').SuspensionRecurrence;
+    startDate: string;
+    endDate: string;
+    timeRanges: import('../../shared/types').SuspensionTimeRange[];
+    weekdays: number[];
+  }) =>
+    request<import('../../shared/types').SuspensionPlan>('/api/suspensions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  checkSuspensionConflicts: (id: string) =>
+    request<import('../../shared/types').SuspensionConflictPreview>(`/api/suspensions/${id}/check-conflicts`, {
+      method: 'POST',
+    }),
+  confirmSuspensionPlan: (id: string, resolution: import('../../shared/types').ConflictResolution) =>
+    request<import('../../shared/types').SuspensionConfirmResult>(`/api/suspensions/${id}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ resolution }),
+    }),
+  revokeSuspensionPlan: (id: string) =>
+    request<import('../../shared/types').SuspensionRevokeResult>(`/api/suspensions/${id}/revoke`, {
+      method: 'POST',
+    }),
 };

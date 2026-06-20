@@ -11,6 +11,7 @@
     "check": "tsc --noEmit",
     "server:dev": "nodemon",
     "test:closed-dates": "tsx test/closed-dates-import-regression.test.ts",
+    "test:suspension": "tsx test/suspension-regression.test.ts",
     "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\""
   },
   "dependencies": {

@@ -52,6 +52,7 @@ powershell -ExecutionPolicy Bypass -File test-batch-import.ps1
 6. **违约记录** - 迟到、未签到、未签退、被退回均自动生成违约记录
 7. **历史查询** - 预约记录、违约记录、操作日志（含失败原因）全量可查
 8. **统计导出** - 按学生或教室维度统计使用数据，支持 CSV 格式导出
+9. **教室停用计划** - 管理员按单次或周期设置维修/考试等停用时段，冲突预检后确认生效，支持撤销回退
 
 ### 异常拦截（均记录操作日志且不改变原预约状态）
 
@@ -196,7 +197,7 @@ npm run check
 │   ├── data/               # 数据访问层（JSON 文件存储）
 │   ├── middleware/         # 中间件（鉴权、审计日志）
 │   ├── routes/             # API 路由
-│   ├── services/           # 业务逻辑（预约、统计）
+│   ├── services/           # 业务逻辑（预约、统计、停用计划）
 │   ├── app.ts              # Express 应用
 │   └── server.ts           # 服务入口
 ├── src/                    # 前端代码
@@ -242,6 +243,12 @@ npm run check
 | GET | `/api/classroom-stats` | 教室统计 | 登录 |
 | GET | `/api/export/:type` | 导出 CSV | 登录 |
 | GET | `/api/audit-logs` | 操作日志 | 登录 |
+| GET | `/api/suspensions` | 停用计划列表 | 管理员 |
+| GET | `/api/suspensions/:id` | 停用计划详情 | 管理员 |
+| POST | `/api/suspensions` | 创建停用计划 | 管理员 |
+| POST | `/api/suspensions/:id/check-conflicts` | 冲突预检 | 管理员 |
+| POST | `/api/suspensions/:id/confirm` | 确认停用计划 | 管理员 |
+| POST | `/api/suspensions/:id/revoke` | 撤销停用计划 | 管理员 |
 
 ---
 
@@ -710,3 +717,205 @@ npx tsx test/closed-dates-import-regression.test.ts
 npm run test:closed-dates
 ```
 该脚本覆盖：权限、表头中英文、教室 4 种匹配方式、同批内重复检测、真正重启后持久化、撤销原子性、导入导出闭环、撤销后导出与快照回退等全部断言。
+
+---
+
+## 教室停用计划模块
+
+> 管理员按单次或周期给教室挂维修、考试占用之类的停用时段，创建后先做冲突预检，再决定处理方式后确认生效；支持撤销并回退所有受影响数据。
+
+### 快速验证
+
+```bash
+# 1. 启动服务
+npm run dev
+
+# 2. 新开终端，运行自动化回归测试
+npm run test:suspension
+```
+
+### 或手动走完闭环（浏览器操作）
+
+| 步骤 | 操作 | 预期结果 |
+|------|------|---------|
+| 1 | 访问 http://localhost:5173，使用 `admin / admin123` 登录 | 进入系统仪表盘 |
+| 2 | 左侧菜单 → 停用计划 | 看到停用计划列表页，显示「暂无停用计划」 |
+| 3 | 点击「新建计划」 | 进入创建表单页 |
+| 4 | 选择教室 A101 → 停用类型选「维修」→ 输入「空调维修」→ 选「单次」→ 选择今天日期作为起止 → 时段 08:00-18:00 → 点击「创建并检查冲突」 | 进入冲突预检页面 |
+| 5 | 如无冲突 → 点击「全部取消」确认 | 计划生效，跳转到结果页 |
+| 6 | 如有冲突 → 查看冲突列表 → 选择处理方式（全部取消 / 取消并建议改期 / 暂时跳过） | 计划生效，显示取消/跳过数量 |
+| 7 | 返回列表 → 状态显示「已生效」 | 列表新增一条红色「已生效」记录 |
+| 8 | 点击「撤销」 | 计划变为「已撤销」，被取消的预约恢复原状态 |
+| 9 | 停止后端 → 重启 → 重新登录 → 停用计划列表 | 所有计划和状态完整恢复 |
+| 10 | 左侧菜单 → 历史记录 → 操作日志 | 可见创建、冲突预检、确认、撤销的审计记录 |
+| 11 | 退出 → 使用 `student01 / 123456` 登录 → 直接访问 `/suspensions` | 自动跳回仪表盘，无管理权限 |
+
+### 整体调用顺序
+
+```
+管理员登录 (POST /api/auth/login)
+    │
+    ▼
+创建停用计划  POST /api/suspensions
+    │  状态：pending（待确认）
+    │
+    ▼
+冲突预检  POST /api/suspensions/:id/check-conflicts
+    │  返回：冲突预约列表及数量
+    │
+    ▼  （管理员选择冲突处理方式）
+确认计划  POST /api/suspensions/:id/confirm
+    │  body: { resolution: 'cancel_all' | 'reschedule_suggest' | 'skip' }
+    │  状态变为 active，生成快照，写入关闭日期
+    │
+    ├─→ 查看计划列表  GET /api/suspensions?status=active
+    │
+    ├─→ 服务重启验证
+    │       关闭后重启 → 计划和快照依然完整（持久化到 db.json）
+    │
+    └─→ 撤销计划  POST /api/suspensions/:id/revoke
+            恢复预约状态、移除关闭日期、删除快照
+            状态变为 revoked
+```
+
+### 停用计划 API
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| GET | `/api/suspensions` | 停用计划列表（支持 `?status=` 过滤） | 管理员 |
+| GET | `/api/suspensions/:id` | 单个停用计划详情 | 管理员 |
+| POST | `/api/suspensions` | 创建停用计划 | 管理员 |
+| POST | `/api/suspensions/:id/check-conflicts` | 冲突预检 | 管理员 |
+| POST | `/api/suspensions/:id/confirm` | 确认生效 | 管理员 |
+| POST | `/api/suspensions/:id/revoke` | 撤销计划 | 管理员 |
+
+### 创建停用计划
+
+**请求**：`POST /api/suspensions`
+
+```json
+{
+  "classroomId": "cls-a101",
+  "reason": "maintenance",
+  "reasonText": "空调维修",
+  "recurrence": "once",
+  "startDate": "2026-07-01",
+  "endDate": "2026-07-01",
+  "timeRanges": [{ "startTime": "08:00", "endTime": "18:00" }],
+  "weekdays": []
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `classroomId` | string | 是 | 教室 ID |
+| `reason` | `'maintenance' \| 'exam' \| 'event' \| 'other'` | 是 | 停用类型 |
+| `reasonText` | string | 是 | 停用原因描述 |
+| `recurrence` | `'once' \| 'daily' \| 'weekly' \| 'monthly'` | 是 | 重复方式 |
+| `startDate` | string | 是 | 开始日期（YYYY-MM-DD） |
+| `endDate` | string | 是 | 结束日期 |
+| `timeRanges` | `SuspensionTimeRange[]` | 是 | 停用时段列表 |
+| `weekdays` | `number[]` | 周期模式必填 | 生效星期（1=周一，7=周日） |
+
+**响应**（201）：创建成功的 `SuspensionPlan` 对象，初始 `status: 'pending'`。
+
+### 冲突预检
+
+**请求**：`POST /api/suspensions/:id/check-conflicts`
+
+无请求体。
+
+**响应**（200）：
+
+```json
+{
+  "plan": { "id": "sp-xxx", "status": "pending", ... },
+  "conflictingReservations": [
+    {
+      "id": "res-xxx",
+      "studentId": "stu-001",
+      "studentName": "张三",
+      "classroomName": "A101",
+      "seatLabel": "A1",
+      "date": "2026-07-01",
+      "startTime": "08:00",
+      "endTime": "10:00",
+      "status": "approved"
+    }
+  ],
+  "conflictCount": 1
+}
+```
+
+系统会根据计划的日期范围、重复规则、时段和星期，自动计算所有受影响日期，并逐一检查是否存在 `pending / approved / checked_in` 状态的预约。
+
+### 确认计划
+
+**请求**：`POST /api/suspensions/:id/confirm`
+
+```json
+{ "resolution": "cancel_all" }
+```
+
+| resolution | 行为 |
+|-----------|------|
+| `cancel_all` | 将所有冲突预约状态设为 `cancelled` |
+| `reschedule_suggest` | 取消预约并附加改期建议（`rejectReason` 含提示） |
+| `skip` | 保留冲突预约不动，计划正常生效 |
+
+确认后系统会：
+1. 按 `resolution` 处理冲突预约
+2. 自动为受影响日期添加 `closedDates` 记录
+3. 生成 `SuspensionSnapshot` 快照（保存确认前的预约状态和关闭日期）
+4. 计划状态变为 `active`
+
+### 撤销计划
+
+**请求**：`POST /api/suspensions/:id/revoke`
+
+撤销后系统会：
+1. 根据快照恢复被取消预约的原始状态
+2. 移除该计划新增的 `closedDates` 记录
+3. 删除快照
+4. 计划状态变为 `revoked`
+
+### 重复规则说明
+
+| recurrence | 日期生成逻辑 | weekdays 要求 |
+|-----------|-------------|--------------|
+| `once` | 仅 `startDate` 当天 | 不需要 |
+| `daily` | 起止范围内每天（可限定 weekdays） | 可选 |
+| `weekly` | 起止范围内匹配 weekdays 的日期 | 必填 |
+| `monthly` | 起止范围内与 startDate 同日号的日期 | 不需要 |
+
+### 数据持久化与重启恢复
+
+停用计划模块所有数据存储在 `data/db.json` 中：
+
+- `suspensionPlans`：停用计划列表（含 pending / active / revoked 全部状态）
+- `suspensionSnapshots`：确认时生成的快照（用于撤销回退）
+
+服务重启后，`getDB()` 会自动兼容旧数据库（缺失字段补空数组），数据完整恢复。
+
+### 回归测试覆盖
+
+`npm run test:suspension` 覆盖以下场景（共 17 组 40+ 断言）：
+
+| 编号 | 测试场景 | 关键断言 |
+|------|---------|---------|
+| 2a-2f | 权限拦截（6 项） | 未登录 401、学生 403（列表/创建/预检/确认/撤销） |
+| 3 | 审计日志记录权限拦截 | 审计日志存在权限不足记录 |
+| 4 | 创建单次停用计划 | 201、status=pending |
+| 5 | 创建周期停用计划 | 201、weekdays 正确 |
+| 6 | 参数校验 | 空原因 400、日期倒序 400 |
+| 7 | 冲突预检（无预约） | conflictCount=0 |
+| 8 | 冲突预检（有预约） | conflictCount=1、ID 匹配 |
+| 9 | 确认（cancel_all） | 取消 1 个、快照存在、关闭日期已添加 |
+| 10 | 重复确认失败 | 400 |
+| 11 | 撤销回退 | 预约恢复、计划 revoked、关闭日期移除、快照清理 |
+| 12 | 重复撤销失败 | 400 |
+| 13 | 确认（skip） | 预约保持 approved |
+| 14 | 确认（reschedule_suggest） | 预约取消且含改期提示 |
+| 15 | 重启恢复 | 重新 getDB 后计划和快照数量一致 |
+| 16 | 列表过滤 | status 过滤正确 |
+| 17 | 审计日志完整性 | 创建/预检/确认/撤销/权限拦截均有日志 |

@@ -14,6 +14,7 @@ import {
   User,
   GraduationCap,
   Shield,
+  Ban,
 } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { useToast } from './Toast';
@@ -29,6 +30,7 @@ const studentMenu = [
 const adminMenu = [
   { path: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
   { path: '/approvals', label: '审批管理', icon: FileCheck },
+  { path: '/suspensions', label: '停用计划', icon: Ban },
   { path: '/classrooms', label: '教室配置', icon: Settings2 },
   { path: '/history', label: '历史记录', icon: History },
   { path: '/statistics', label: '统计导出', icon: BarChart3 },

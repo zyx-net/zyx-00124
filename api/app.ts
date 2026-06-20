@@ -11,6 +11,7 @@ import authRoutes from './routes/auth.js'
 import classroomRoutes from './routes/classrooms.js'
 import reservationRoutes from './routes/reservations.js'
 import reportRoutes from './routes/reports.js'
+import suspensionRoutes from './routes/suspension.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -27,6 +28,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/classrooms', classroomRoutes)
 app.use('/api/reservations', reservationRoutes)
 app.use('/api', reportRoutes)
+app.use('/api/suspensions', suspensionRoutes)
 
 app.use(
   '/api/health',

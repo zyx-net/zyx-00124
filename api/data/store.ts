@@ -11,6 +11,8 @@ import type {
   AuditLog,
   SystemConfig,
   ClosedDateImportSnapshot,
+  SuspensionPlan,
+  SuspensionSnapshot,
 } from '../../shared/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -57,6 +59,8 @@ export interface DB {
   auditLogs: AuditLog[];
   config: SystemConfig;
   lastClosedDateImport?: ClosedDateImportSnapshot | null;
+  suspensionPlans: SuspensionPlan[];
+  suspensionSnapshots: SuspensionSnapshot[];
 }
 
 function getDefaultData(): DB {
@@ -153,6 +157,8 @@ function getDefaultData(): DB {
     auditLogs: [],
     config,
     lastClosedDateImport: null,
+    suspensionPlans: [],
+    suspensionSnapshots: [],
   };
 }
 
@@ -163,6 +169,8 @@ export function getDB(): DB {
     writeFile('db.json', defaultData);
     return defaultData;
   }
+  if (!db.suspensionPlans) db.suspensionPlans = [];
+  if (!db.suspensionSnapshots) db.suspensionSnapshots = [];
   return db;
 }
 

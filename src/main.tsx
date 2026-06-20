@@ -13,6 +13,7 @@ import ClassroomConfig from '@/pages/ClassroomConfig';
 import CheckIn from '@/pages/CheckIn';
 import History from '@/pages/History';
 import Statistics from '@/pages/Statistics';
+import SuspensionPlans from '@/pages/SuspensionPlans';
 import './index.css';
 
 function AppRoutes() {
@@ -70,6 +71,16 @@ function AppRoutes() {
           <ProtectedRoute roles={['admin']}>
             <Layout>
               <ClassroomConfig />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/suspensions"
+        element={
+          <ProtectedRoute roles={['admin']}>
+            <Layout>
+              <SuspensionPlans />
             </Layout>
           </ProtectedRoute>
         }
