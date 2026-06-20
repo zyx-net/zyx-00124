@@ -40,6 +40,8 @@ export interface ClosedDate {
   date: string;
   reason: string;
   classroomId?: string;
+  startTime?: string;
+  endTime?: string;
 }
 
 export type ImportRowStatus = 'new' | 'duplicate' | 'invalid';

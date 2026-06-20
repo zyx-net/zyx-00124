@@ -10,7 +10,7 @@ import {
   getClassroomSeatStatus,
   processMissedCheckouts,
   getStudentViolationCount,
-  isClosedDate,
+  checkSlotSuspension,
 } from '../services/reservation.js';
 
 const router = Router();
@@ -70,17 +70,17 @@ router.get('/seat-status', authMiddleware, (req: Request, res: Response): void =
     res.status(400).json({ error: '缺少参数' });
     return;
   }
-  const closed = isClosedDate(date);
-  if (closed) {
-    res.json({ closed: true, closedReason: closed.reason, seats: {} });
-    return;
-  }
+  const slotCheck = checkSlotSuspension(classroomId, date, slotId);
   const statusMap = getClassroomSeatStatus(classroomId, date, slotId);
-  const seats: Record<string, { available: boolean; reservationId?: string }> = {};
+  const seats: Record<string, { available: boolean; reservationId?: string; suspensionClosed?: boolean; suspensionReason?: string }> = {};
   statusMap.forEach((v, k) => {
     seats[k] = v;
   });
-  res.json({ closed: false, seats });
+  res.json({
+    closed: slotCheck.closed,
+    closedReason: slotCheck.reason,
+    seats,
+  });
 });
 
 router.post('/', authMiddleware, roleMiddleware('student'), (req: Request, res: Response): void => {

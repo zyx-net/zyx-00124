@@ -1,4 +1,10 @@
 import { getDB, saveDB, generateId } from '../data/store.js';
+import {
+  parseDateLocal,
+  todayLocalStr,
+  checkSuspensionHit,
+  type SuspensionMatchResult,
+} from './suspension.js';
 import type {
   User,
   Classroom,
@@ -9,19 +15,6 @@ import type {
   ClosedDate,
 } from '../../shared/types.js';
 
-function pad2(n: number): string {
-  return n.toString().padStart(2, '0');
-}
-
-export function todayLocalStr(d: Date = new Date()): string {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function parseDateLocal(dateStr: string): Date {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
-
 function parseTime(dateStr: string, timeStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   const [hh, mm] = timeStr.split(':').map(Number);
@@ -31,6 +24,35 @@ function parseTime(dateStr: string, timeStr: string): Date {
 export function isClosedDate(date: string): ClosedDate | undefined {
   const db = getDB();
   return db.closedDates.find((c) => c.date === date);
+}
+
+export interface ClosedSlotCheck {
+  closed: boolean;
+  reason?: string;
+}
+
+export function checkSlotSuspension(
+  classroomId: string,
+  date: string,
+  slotId: string,
+): ClosedSlotCheck {
+  const db = getDB();
+  const slot = db.timeSlots.find((s) => s.id === slotId && s.classroomId === classroomId);
+  if (!slot) {
+    return { closed: false };
+  }
+
+  const result: SuspensionMatchResult = checkSuspensionHit({
+    classroomId,
+    date,
+    startTime: slot.startTime,
+    endTime: slot.endTime,
+  });
+
+  if (result.hit) {
+    return { closed: true, reason: result.reason };
+  }
+  return { closed: false };
 }
 
 export function isSeatAvailable(
@@ -62,9 +84,19 @@ export function createReservation(
 ): { success: boolean; data?: Reservation; error?: string } {
   const db = getDB();
 
-  const closed = isClosedDate(date);
-  if (closed) {
-    return { success: false, error: `${date} 为关闭日期（${closed.reason}），不可预约` };
+  const slot = db.timeSlots.find((s) => s.id === slotId && s.classroomId === classroomId);
+  if (!slot) {
+    return { success: false, error: '时段不存在' };
+  }
+
+  const suspensionCheck = checkSuspensionHit({
+    classroomId,
+    date,
+    startTime: slot.startTime,
+    endTime: slot.endTime,
+  });
+  if (suspensionCheck.hit) {
+    return { success: false, error: `${date} ${slot.startTime}-${slot.endTime} 为停用时段（${suspensionCheck.reason}），不可预约` };
   }
 
   const classroom = db.classrooms.find((c) => c.id === classroomId);
@@ -78,11 +110,6 @@ export function createReservation(
   }
   if (!seat.enabled) {
     return { success: false, error: '该座位已禁用' };
-  }
-
-  const slot = db.timeSlots.find((s) => s.id === slotId && s.classroomId === classroomId);
-  if (!slot) {
-    return { success: false, error: '时段不存在' };
   }
 
   const dateObj = parseDateLocal(date);
@@ -127,6 +154,16 @@ export function approveReservation(
   }
   if (!isSeatAvailable(reservation.classroomId, reservation.seatId, reservation.date, reservation.slotId, reservationId)) {
     return { success: false, error: '同座位同时段已有批准的预约，无法重复批准' };
+  }
+
+  const suspensionCheck = checkSuspensionHit({
+    classroomId: reservation.classroomId,
+    date: reservation.date,
+    startTime: reservation.startTime,
+    endTime: reservation.endTime,
+  });
+  if (suspensionCheck.hit) {
+    return { success: false, error: `该时段已被停用（${suspensionCheck.reason}），无法批准` };
   }
 
   reservation.status = 'approved';
@@ -305,18 +342,45 @@ export function getStudentViolationCount(studentId: string): number {
   return db.violations.filter((v) => v.studentId === studentId).length;
 }
 
+export interface SeatStatusEntry {
+  available: boolean;
+  reservationId?: string;
+  suspensionClosed?: boolean;
+  suspensionReason?: string;
+}
+
 export function getClassroomSeatStatus(
   classroomId: string,
   date: string,
   slotId: string,
-): Map<string, { available: boolean; reservationId?: string }> {
+): Map<string, SeatStatusEntry> {
   const db = getDB();
-  const result = new Map<string, { available: boolean; reservationId?: string }>();
+  const result = new Map<string, SeatStatusEntry>();
   const classroom = db.classrooms.find((c) => c.id === classroomId);
   if (!classroom) return result;
 
+  const slot = db.timeSlots.find((s) => s.id === slotId && s.classroomId === classroomId);
+  const slotCheck = slot
+    ? checkSuspensionHit({
+        classroomId,
+        date,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+      })
+    : { hit: false };
+
   for (const seat of classroom.seats) {
-    result.set(seat.id, { available: seat.enabled && isSeatAvailable(classroomId, seat.id, date, slotId) });
+    if (slotCheck.hit) {
+      result.set(seat.id, {
+        available: false,
+        suspensionClosed: true,
+        suspensionReason: slotCheck.reason,
+      });
+    } else {
+      result.set(seat.id, {
+        available: seat.enabled && isSeatAvailable(classroomId, seat.id, date, slotId),
+      });
+    }
   }
 
   for (const r of db.reservations) {

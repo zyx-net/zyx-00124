@@ -16,16 +16,16 @@ import type {
   Reservation,
 } from '../../shared/types.js';
 
-function parseDateLocal(dateStr: string): Date {
+export function parseDateLocal(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
 
-function pad2(n: number): string {
+export function pad2(n: number): string {
   return n.toString().padStart(2, '0');
 }
 
-function todayLocalStr(d: Date = new Date()): string {
+export function todayLocalStr(d: Date = new Date()): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
@@ -34,21 +34,43 @@ function getWeekday(dateStr: string): number {
   return d.getDay() === 0 ? 7 : d.getDay();
 }
 
-function timeToMinutes(t: string): number {
+export function timeToMinutes(t: string): number {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
 }
 
-function timeRangesOverlap(
-  a: SuspensionTimeRange,
+export function timeRangesOverlap(
+  aStart: string,
+  aEnd: string,
   bStart: string,
   bEnd: string,
 ): boolean {
-  const aStart = timeToMinutes(a.startTime);
-  const aEnd = timeToMinutes(a.endTime);
-  const bStartMin = timeToMinutes(bStart);
-  const bEndMin = timeToMinutes(bEnd);
-  return aStart < bEndMin && aEnd > bStartMin;
+  const aS = timeToMinutes(aStart);
+  const aE = timeToMinutes(aEnd);
+  const bS = timeToMinutes(bStart);
+  const bE = timeToMinutes(bEnd);
+  return aS < bE && aE > bS;
+}
+
+export function planTimeRangesOverlap(
+  plan: SuspensionPlan,
+  startTime: string,
+  endTime: string,
+): boolean {
+  return plan.timeRanges.some((tr) =>
+    timeRangesOverlap(tr.startTime, tr.endTime, startTime, endTime),
+  );
+}
+
+export function closedDateTimeRangesOverlap(
+  cd: ClosedDate,
+  startTime: string,
+  endTime: string,
+): boolean {
+  if (!cd.startTime || !cd.endTime) {
+    return true;
+  }
+  return timeRangesOverlap(cd.startTime, cd.endTime, startTime, endTime);
 }
 
 export function generateDatesForPlan(plan: SuspensionPlan): string[] {
@@ -79,6 +101,78 @@ export function generateDatesForPlan(plan: SuspensionPlan): string[] {
   }
 
   return dates;
+}
+
+export interface SuspensionMatchQuery {
+  classroomId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface SuspensionMatchResult {
+  hit: boolean;
+  reason?: string;
+  sourcePlanId?: string;
+}
+
+export function matchSuspensionByActivePlans(
+  query: SuspensionMatchQuery,
+): SuspensionMatchResult {
+  const db = getDB();
+  const { classroomId, date, startTime, endTime } = query;
+
+  for (const plan of db.suspensionPlans) {
+    if (plan.status !== 'active') continue;
+    if (plan.classroomId !== classroomId) continue;
+
+    const dates = generateDatesForPlan(plan);
+    if (!dates.includes(date)) continue;
+
+    if (planTimeRangesOverlap(plan, startTime, endTime)) {
+      return {
+        hit: true,
+        reason: `${plan.reasonText}（${plan.timeRanges.map(tr => `${tr.startTime}-${tr.endTime}`).join('、')}）`,
+        sourcePlanId: plan.id,
+      };
+    }
+  }
+
+  return { hit: false };
+}
+
+export function matchSuspensionByClosedDates(
+  query: SuspensionMatchQuery,
+): SuspensionMatchResult {
+  const db = getDB();
+  const { classroomId, date, startTime, endTime } = query;
+
+  for (const cd of db.closedDates) {
+    if (cd.date !== date) continue;
+
+    if (cd.classroomId && cd.classroomId !== classroomId) continue;
+
+    if (cd.classroomId === classroomId || !cd.classroomId) {
+      if (closedDateTimeRangesOverlap(cd, startTime, endTime)) {
+        return {
+          hit: true,
+          reason: cd.reason,
+        };
+      }
+    }
+  }
+
+  return { hit: false };
+}
+
+export function checkSuspensionHit(query: SuspensionMatchQuery): SuspensionMatchResult {
+  const byPlans = matchSuspensionByActivePlans(query);
+  if (byPlans.hit) return byPlans;
+
+  const byClosedDates = matchSuspensionByClosedDates(query);
+  if (byClosedDates.hit) return byClosedDates;
+
+  return { hit: false };
 }
 
 export function createSuspensionPlan(
@@ -172,9 +266,7 @@ export function checkSuspensionConflicts(planId: string): {
       if (r.date !== date) continue;
       if (r.status !== 'approved' && r.status !== 'pending' && r.status !== 'checked_in') continue;
 
-      const overlaps = plan.timeRanges.some((tr) =>
-        timeRangesOverlap(tr, r.startTime, r.endTime),
-      );
+      const overlaps = planTimeRangesOverlap(plan, r.startTime, r.endTime);
       if (overlaps) {
         const student = users.get(r.studentId);
         const seat = classroom?.seats.find((s) => s.id === r.seatId);
@@ -256,20 +348,20 @@ export function confirmSuspensionPlan(
   const addedClosedDates: ClosedDate[] = [];
   for (const date of dates) {
     for (const tr of plan.timeRanges) {
-      const existing = db.closedDates.find(
-        (cd) => cd.date === date && cd.classroomId === plan.classroomId,
-      );
-      if (!existing) {
-        const closedDate: ClosedDate = {
-          date,
-          reason: `${plan.reasonText}（${tr.startTime}-${tr.endTime}）`,
-          classroomId: plan.classroomId,
-        };
-        db.closedDates.push(closedDate);
-        addedClosedDates.push(closedDate);
-      } else {
-        addedClosedDates.push({ ...existing });
-      }
+      addedClosedDates.push({
+        date,
+        reason: `${plan.reasonText}（${tr.startTime}-${tr.endTime}）`,
+        classroomId: plan.classroomId,
+        startTime: tr.startTime,
+        endTime: tr.endTime,
+      });
+      db.closedDates.push({
+        date,
+        reason: `${plan.reasonText}（${tr.startTime}-${tr.endTime}）`,
+        classroomId: plan.classroomId,
+        startTime: tr.startTime,
+        endTime: tr.endTime,
+      });
     }
   }
 
@@ -292,7 +384,7 @@ export function confirmSuspensionPlan(
 
   saveDB(db);
 
-  const summary = `停用计划已生效：取消 ${cancelledIds.length} 个预约，跳过 ${skippedIds.length} 个，新增 ${addedClosedDates.length} 个关闭日期`;
+  const summary = `停用计划已生效：取消 ${cancelledIds.length} 个预约，跳过 ${skippedIds.length} 个，新增 ${addedClosedDates.length} 个关闭时段`;
   return {
     success: true,
     data: {
@@ -305,6 +397,10 @@ export function confirmSuspensionPlan(
       summary,
     },
   };
+}
+
+function closedDateKey(cd: ClosedDate): string {
+  return `${cd.date}|${cd.classroomId || ''}|${cd.startTime || ''}|${cd.endTime || ''}`;
 }
 
 export function revokeSuspensionPlan(
@@ -338,19 +434,14 @@ export function revokeSuspensionPlan(
     }
   }
 
-  const addedDateKeys = new Set(
-    snapshot.addedClosedDates.map((cd) => `${cd.date}|${cd.classroomId || ''}`),
-  );
-  db.closedDates = db.closedDates.filter((cd) => {
-    const key = `${cd.date}|${cd.classroomId || ''}`;
-    return !addedDateKeys.has(key);
-  });
-  const currentKeys = new Set(db.closedDates.map((cd) => `${cd.date}|${cd.classroomId || ''}`));
+  const addedDateKeys = new Set(snapshot.addedClosedDates.map(closedDateKey));
+  db.closedDates = db.closedDates.filter((cd) => !addedDateKeys.has(closedDateKey(cd)));
+
+  const currentKeys = new Set(db.closedDates.map(closedDateKey));
   for (const prev of snapshot.previousClosedDates) {
-    const key = `${prev.date}|${prev.classroomId || ''}`;
-    if (!currentKeys.has(key)) {
+    if (!currentKeys.has(closedDateKey(prev))) {
       db.closedDates.push(prev);
-      currentKeys.add(key);
+      currentKeys.add(closedDateKey(prev));
     }
   }
   const removedClosedDateCount = addedDateKeys.size;
@@ -367,7 +458,7 @@ export function revokeSuspensionPlan(
 
   saveDB(db);
 
-  const summary = `已撤销停用计划：恢复 ${restoredIds.length} 个预约，移除 ${snapshot.addedClosedDates.length} 个关闭日期`;
+  const summary = `已撤销停用计划：恢复 ${restoredIds.length} 个预约，移除 ${removedClosedDateCount} 个关闭时段`;
   return {
     success: true,
     data: {
@@ -375,7 +466,7 @@ export function revokeSuspensionPlan(
       planId: plan.id,
       restoredCount: restoredIds.length,
       restoredReservationIds: restoredIds,
-      removedClosedDateCount: snapshot.addedClosedDates.length,
+      removedClosedDateCount,
       summary,
     },
   };
@@ -394,5 +485,3 @@ export function getSuspensionPlan(planId: string): SuspensionPlan | undefined {
   const db = getDB();
   return db.suspensionPlans.find((p) => p.id === planId);
 }
-
-export { todayLocalStr };

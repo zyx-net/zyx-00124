@@ -722,7 +722,9 @@ npm run test:closed-dates
 
 ## 教室停用计划模块
 
-> 管理员按单次或周期给教室挂维修、考试占用之类的停用时段，创建后先做冲突预检，再决定处理方式后确认生效；支持撤销并回退所有受影响数据。
+> 管理员按单次或周期给教室挂维修、考试占用之类的**细粒度时段**停用，同一天里只关目标教室的目标时段，不误伤其他时段或其他教室。创建后先做冲突预检，再决定处理方式后确认生效；支持撤销并精确回退所有受影响数据。
+>
+> **核心规则（共享命中逻辑）**：所有停用判断统一走 `checkSuspensionHit(classroomId, date, startTime, endTime)`，按「教室 + 日期 + 时段重叠」三维精确匹配，创建、确认、座位状态查询、预约校验、撤销回退全部复用这一套规则。
 
 ### 快速验证
 
@@ -766,15 +768,16 @@ npm run test:suspension
     ▼  （管理员选择冲突处理方式）
 确认计划  POST /api/suspensions/:id/confirm
     │  body: { resolution: 'cancel_all' | 'reschedule_suggest' | 'skip' }
-    │  状态变为 active，生成快照，写入关闭日期
+    │  状态变为 active，生成快照，写入带 startTime/endTime 的关闭时段记录
+    │  （每条记录精确表达：某教室+某天+某时段关闭，互不干扰）
     │
     ├─→ 查看计划列表  GET /api/suspensions?status=active
     │
     ├─→ 服务重启验证
-    │       关闭后重启 → 计划和快照依然完整（持久化到 db.json）
+    │       关闭后重启 → 计划、快照、预约状态、审计日志依然完整（持久化到 db.json）
     │
     └─→ 撤销计划  POST /api/suspensions/:id/revoke
-            恢复预约状态、移除关闭日期、删除快照
+            恢复预约状态（含 rejectReason）、按 (date,classroom,startTime,endTime) 精确移除关闭时段、删除快照
             状态变为 revoked
 ```
 
@@ -865,7 +868,9 @@ npm run test:suspension
 
 确认后系统会：
 1. 按 `resolution` 处理冲突预约
-2. 自动为受影响日期添加 `closedDates` 记录
+2. 自动为 **(日期 × 时段)** 组合添加带 `startTime`/`endTime` 的 `closedDates` 记录
+   - 例：A101 在 2026-07-01 停用 08:00-10:00，只写入 1 条 `{date, classroomId, startTime: '08:00', endTime: '10:00', reason}`
+   - 同天 A101 的 14:00-16:00、B202 的所有时段**完全不受影响**
 3. 生成 `SuspensionSnapshot` 快照（保存确认前的预约状态和关闭日期）
 4. 计划状态变为 `active`
 
@@ -874,8 +879,8 @@ npm run test:suspension
 **请求**：`POST /api/suspensions/:id/revoke`
 
 撤销后系统会：
-1. 根据快照恢复被取消预约的原始状态
-2. 移除该计划新增的 `closedDates` 记录
+1. 根据快照恢复被取消预约的原始状态（**精确恢复 `rejectReason` 等字段**）
+2. 按 `(date, classroomId, startTime, endTime)` 四元组**精确匹配并移除**该计划新增的 `closedDates` 记录（不误删同天其他时段）
 3. 删除快照
 4. 计划状态变为 `revoked`
 
@@ -899,7 +904,7 @@ npm run test:suspension
 
 ### 回归测试覆盖
 
-`npm run test:suspension` 覆盖以下场景（共 17 组 40+ 断言）：
+`npm run test:suspension` 覆盖以下场景（共 20 组 60+ 断言）：
 
 | 编号 | 测试场景 | 关键断言 |
 |------|---------|---------|
@@ -919,3 +924,43 @@ npm run test:suspension
 | 15 | 重启恢复 | 重新 getDB 后计划和快照数量一致 |
 | 16 | 列表过滤 | status 过滤正确 |
 | 17 | 审计日志完整性 | 创建/预检/确认/撤销/权限拦截均有日志 |
+| **18** | **边界场景 A：细粒度不误伤** | A101 08-10 停用后：slot-1 关闭+返回细粒度错误；A101 14-16 可正常预约(201 pending)；B202 14-16 完全不受影响可预约；closedDates 只新增 1 条含精确时段 |
+| **19** | **边界场景 B：冲突预检/跳过/改期链路** | 预检出 approved+pending 两种冲突；skip 确认后预约保持 approved、计划 active；reschedule_suggest 后 pending 被取消且含改期提示；撤销按四元组精确删除 closedDates + 恢复 rejectReason |
+| **20** | **边界场景 C：重启一致性** | 重启前后计划/快照/审计/closedDates 数量完全一致；A101 计划状态、下午预约状态不变；closedDates 的 startTime/endTime 重启不丢失 |
+
+### 边界场景手动复核（任选其一即可）
+
+#### 18. 细粒度不误伤（必查）
+
+| 步骤 | 操作 | 预期结果 |
+|------|------|---------|
+| 1 | 创建 A101 教室、停用类型=其他、原因=A101上午设备检修、单次、今天、时段 **08:00-10:00** | 计划创建成功 status=pending |
+| 2 | 冲突预检 → cancel_all 确认 | summary 显示「关闭时段」而非「关闭日期」 |
+| 3 | 学生账号登录，查 A101 今天 **slot-1 (08-10)** 座位状态 | `closed:true`，返回 `closedReason` 含时段范围 |
+| 4 | 学生尝试预约 A101 slot-1 任意座位 | HTTP 400，错误信息含「停用时段」和 `08:00-10:00` |
+| 5 | 学生预约 A101 今天 **slot-3 (14-16)** 任意座位 | HTTP 201，status=pending ✅（同教室其他时段正常） |
+| 6 | 学生预约 B202 今天 **slot-7 (14-16)** 任意座位 | HTTP 201，status=pending ✅（其他教室完全不受影响） |
+| 7 | 管理员撤销该计划 | 同天 A101 其他停用记录（若存在）**不被误删** |
+
+#### 19. 冲突预检/跳过/改期链路（必查）
+
+先插入 1 条 approved + 1 条 pending 预约（目标教室 08-10 时段），再：
+
+| 步骤 | 操作 | 预期结果 |
+|------|------|---------|
+| 1 | 创建停用计划覆盖该时段 → 冲突预检 | conflictCount = 2，两种状态都列出 |
+| 2 | resolution=skip 确认 | 两条预约保持原状态不变，计划 active |
+| 3 | 撤销该计划 | closedDates 按四元组精确移除，approved/pending 保持 |
+| 4 | 重新创建+reschedule_suggest 确认 | pending 预约变为 cancelled，rejectReason 含「重新预约」提示 |
+| 5 | 撤销 | pending 预约恢复为 pending，**rejectReason 被清空** |
+
+#### 20. 重启一致性（必查）
+
+完成任一操作后：
+
+| 步骤 | 操作 | 预期结果 |
+|------|------|---------|
+| 1 | 关闭后端服务 → 重新启动 → 登录 | 停用计划列表、状态全部不变 |
+| 2 | 对比计划数量/状态、快照数量、预约数量/状态、审计日志数量 | 重启前后 **完全一致** |
+| 3 | 查看 db.json 中 `closedDates` | 对应记录的 `startTime`/`endTime` 字段存在且正确 |
+| 4 | 审计日志查「创建停用计划」「确认停用计划」「撤销停用计划」「提交预约」「提交预约失败」 | 记录完整，success/action 字段合法 |

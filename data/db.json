@@ -506,9 +506,113 @@
     }
   ],
   "closedDates": [],
-  "reservations": [],
+  "reservations": [
+    {
+      "id": "res-mqm3mx3dvv1vx4",
+      "studentId": "stu-001",
+      "classroomId": "cls-b202",
+      "seatId": "cls-b202-seat-1-1",
+      "date": "2026-06-23",
+      "slotId": "slot-7",
+      "startTime": "14:00",
+      "endTime": "16:00",
+      "status": "pending",
+      "createdAt": "2026-06-20T08:31:54.889Z"
+    },
+    {
+      "id": "res-mqm3mx2043gzz2",
+      "studentId": "stu-001",
+      "classroomId": "cls-a101",
+      "seatId": "cls-a101-seat-1-1",
+      "date": "2026-06-23",
+      "slotId": "slot-3",
+      "startTime": "14:00",
+      "endTime": "16:00",
+      "status": "pending",
+      "createdAt": "2026-06-20T08:31:54.840Z"
+    }
+  ],
   "violations": [],
   "auditLogs": [
+    {
+      "id": "mqm3mxer9ma0uo",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "已撤销停用计划：恢复 0 个预约，移除 1 个关闭时段",
+      "targetId": "sp-mqm3mx05pxbsd8",
+      "success": true,
+      "createdAt": "2026-06-20T08:31:55.299Z"
+    },
+    {
+      "id": "mqm3mx3du8ct0z",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "提交预约成功",
+      "targetId": "res-mqm3mx3dvv1vx4",
+      "success": true,
+      "createdAt": "2026-06-20T08:31:54.889Z"
+    },
+    {
+      "id": "mqm3mx26j954jm",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "提交预约失败",
+      "success": false,
+      "reason": "2026-06-23 08:00-10:00 为停用时段（A101??????（08:00-10:00）），不可预约",
+      "createdAt": "2026-06-20T08:31:54.846Z"
+    },
+    {
+      "id": "mqm3mx20d9o0s4",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "提交预约成功",
+      "targetId": "res-mqm3mx2043gzz2",
+      "success": true,
+      "createdAt": "2026-06-20T08:31:54.841Z"
+    },
+    {
+      "id": "mqm3mx0ijr9wfs",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "停用计划已生效：取消 0 个预约，跳过 0 个，新增 1 个关闭时段",
+      "targetId": "sp-mqm3mx05pxbsd8",
+      "success": true,
+      "createdAt": "2026-06-20T08:31:54.786Z"
+    },
+    {
+      "id": "mqm3mx0dm3m02o",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "冲突预检：发现 0 个冲突预约",
+      "targetId": "sp-mqm3mx05pxbsd8",
+      "success": true,
+      "createdAt": "2026-06-20T08:31:54.781Z"
+    },
+    {
+      "id": "mqm3mx06oekyl5",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "创建停用计划",
+      "targetId": "sp-mqm3mx05pxbsd8",
+      "success": true,
+      "createdAt": "2026-06-20T08:31:54.774Z"
+    },
+    {
+      "id": "mqm3mwwpn5neo8",
+      "userId": "stu-001",
+      "userName": "张三",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-20T08:31:54.649Z"
+    },
+    {
+      "id": "mqm3mww393xlk1",
+      "userId": "admin-001",
+      "userName": "系统管理员",
+      "action": "登录成功",
+      "success": true,
+      "createdAt": "2026-06-20T08:31:54.627Z"
+    },
     {
       "id": "mqlhg8twr9uhcl",
       "userId": "stu-001",
@@ -597,5 +701,32 @@
     "lateThresholdMinutes": 15,
     "violationWarningThreshold": 3
   },
-  "lastClosedDateImport": null
+  "lastClosedDateImport": null,
+  "suspensionPlans": [
+    {
+      "id": "sp-mqm3mx05pxbsd8",
+      "classroomId": "cls-a101",
+      "reason": "maintenance",
+      "reasonText": "A101??????",
+      "recurrence": "once",
+      "startDate": "2026-06-23",
+      "endDate": "2026-06-23",
+      "timeRanges": [
+        {
+          "startTime": "08:00",
+          "endTime": "10:00"
+        }
+      ],
+      "weekdays": [],
+      "status": "revoked",
+      "createdBy": "admin-001",
+      "createdByName": "系统管理员",
+      "createdAt": "2026-06-20T08:31:54.773Z",
+      "confirmedAt": "2026-06-20T08:31:54.785Z",
+      "revokedAt": "2026-06-20T08:31:55.298Z",
+      "revokedBy": "admin-001",
+      "revokedByName": "系统管理员"
+    }
+  ],
+  "suspensionSnapshots": []
 }
